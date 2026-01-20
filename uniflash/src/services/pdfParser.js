@@ -1,8 +1,8 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import OpenAI from 'openai';
 
-// Set up PDF.js worker with HTTPS
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// Set up PDF.js worker - using unpkg for better reliability
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
 
 /**
  * Parse a PDF file and extract text content
@@ -58,16 +58,23 @@ export const parsePDF = async (file) => {
     return pages;
   } catch (error) {
     console.error('Error parsing PDF:', error);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
 
     // Provide more specific error messages
     if (error.message && error.message.includes('Invalid PDF')) {
       throw new Error('This file does not appear to be a valid PDF. Please try another file.');
     } else if (error.message && error.message.includes('password')) {
       throw new Error('This PDF is password-protected. Please use an unprotected PDF file.');
-    } else if (error.message && error.message.includes('worker')) {
-      throw new Error('PDF processing failed. Please try refreshing the page and uploading again.');
+    } else if (error.message && (error.message.includes('worker') || error.message.includes('Worker'))) {
+      throw new Error('PDF worker failed to load. Please refresh the page and try again. If the problem persists, check your internet connection.');
+    } else if (error.name === 'InvalidPDFException') {
+      throw new Error('Invalid or corrupted PDF file. Please try a different file.');
     } else {
-      throw new Error(`Failed to parse PDF: ${error.message || 'Unknown error'}`);
+      throw new Error(`Failed to parse PDF: ${error.message || 'Unknown error'}. Please try refreshing the page.`);
     }
   }
 };
