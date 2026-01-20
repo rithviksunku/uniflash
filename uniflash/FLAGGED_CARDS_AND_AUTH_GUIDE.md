@@ -28,6 +28,7 @@ Go to **My Flashcards** (`/flashcards`):
 - See a banner showing count of flagged cards
 - Filter view to show only flagged cards using dropdown: "🚩 Flagged Cards"
 - Flagged cards show a "🚩 Flagged" badge
+- **Unflag cards** by clicking the "🚩 Unflag" button on any flagged card
 
 #### 3. Creating a Set from Flagged Cards
 1. Go to **My Flashcards** page
@@ -38,8 +39,9 @@ Go to **My Flashcards** (`/flashcards`):
 6. New set is created with all flagged cards assigned to it
 
 ### Database Changes
-Run this SQL migration in your Supabase SQL Editor:
+Run these SQL migrations in your Supabase SQL Editor:
 
+**Step 1: Add flagged column**
 ```sql
 -- Add is_flagged column to flashcards table
 ALTER TABLE flashcards
@@ -50,6 +52,14 @@ CREATE INDEX IF NOT EXISTS idx_flashcards_is_flagged ON flashcards(is_flagged);
 ```
 
 Or run the complete migration file: `ADD_FLAGGED_FLASHCARDS.sql`
+
+**Step 2: Fix RLS Policies (IMPORTANT!)**
+```sql
+-- Fix RLS policies to allow creating sets and updating flags
+-- Run this file: FIX_RLS_POLICIES.sql
+```
+
+Without fixing the RLS policies, you'll get an error when trying to create sets from flagged cards.
 
 ### Files Modified
 - `/src/pages/PracticeMode.jsx` - Added flag toggle button

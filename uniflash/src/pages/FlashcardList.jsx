@@ -271,6 +271,24 @@ const FlashcardList = () => {
     setEditingCard(null);
   };
 
+  const toggleFlag = async (cardId, currentFlagStatus) => {
+    const { error } = await supabase
+      .from('flashcards')
+      .update({ is_flagged: !currentFlagStatus })
+      .eq('id', cardId);
+
+    if (!error) {
+      // Update local state
+      setFlashcards(flashcards.map(card =>
+        card.id === cardId
+          ? { ...card, is_flagged: !currentFlagStatus }
+          : card
+      ));
+    } else {
+      alert('Error updating flag: ' + error.message);
+    }
+  };
+
   const createSetFromFlagged = async () => {
     const flaggedCards = flashcards.filter(card => card.is_flagged);
 
@@ -492,6 +510,13 @@ const FlashcardList = () => {
                     </div>
                   )}
                   <div className="card-actions">
+                    <button
+                      onClick={() => toggleFlag(card.id, card.is_flagged)}
+                      className={card.is_flagged ? "btn-warning" : "btn-secondary"}
+                      title={card.is_flagged ? "Unflag this card" : "Flag as difficult"}
+                    >
+                      {card.is_flagged ? '🚩 Unflag' : '🏳️ Flag'}
+                    </button>
                     <button
                       onClick={() => handleEdit(card)}
                       className="btn-secondary"
