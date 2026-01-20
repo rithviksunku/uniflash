@@ -332,21 +332,56 @@ const FlashcardList = () => {
       return;
     }
 
-    // Optional: Unflag the cards after adding to set
-    const shouldUnflag = confirm(
-      `Set "${setName}" created successfully with ${flaggedCards.length} cards!\n\nWould you like to unflag these cards now?`
-    );
-
-    if (shouldUnflag) {
-      await supabase
-        .from('flashcards')
-        .update({ is_flagged: false })
-        .eq('set_id', newSet.id);
-    }
+    // Show success message
+    alert(`✅ Set "${setName}" created successfully with ${flaggedCards.length} cards!\n\nYou can unflag cards anytime from the flashcard list.`);
 
     // Refresh the flashcards list
     fetchFlashcards();
     fetchSets();
+  };
+
+  const unflagCardsInSet = async (setId, setName) => {
+    if (!confirm(`Unflag all cards in "${setName}"?\n\nThis will remove the flag from all cards in this set.`)) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from('flashcards')
+      .update({ is_flagged: false })
+      .eq('set_id', setId);
+
+    if (error) {
+      alert('Error unflagging cards: ' + error.message);
+    } else {
+      alert(`✅ All cards in "${setName}" have been unflagged!`);
+      fetchFlashcards();
+    }
+  };
+
+  const deleteSet = async (setId, setName) => {
+    if (!confirm(`Delete set "${setName}"?\n\nCards in this set will become unassigned (not deleted).`)) {
+      return;
+    }
+
+    // First, unassign all cards from this set
+    await supabase
+      .from('flashcards')
+      .update({ set_id: null })
+      .eq('set_id', setId);
+
+    // Then delete the set
+    const { error } = await supabase
+      .from('flashcard_sets')
+      .delete()
+      .eq('id', setId);
+
+    if (error) {
+      alert('Error deleting set: ' + error.message);
+    } else {
+      alert(`✅ Set "${setName}" has been deleted!`);
+      fetchFlashcards();
+      fetchSets();
+    }
   };
 
   if (loading) {
@@ -397,15 +432,52 @@ const FlashcardList = () => {
 
       {flashcards.filter(card => card.is_flagged).length > 0 && (
         <div className="flagged-section">
-          <div className="flagged-info">
-            🚩 You have {flashcards.filter(card => card.is_flagged).length} flagged card(s)
+          <div className="flagged-section-content">
+            <div className="flagged-info">
+              <span className="flagged-icon">🚩</span>
+              <div className="flagged-text">
+                <strong>{flashcards.filter(card => card.is_flagged).length} Flagged Card{flashcards.filter(card => card.is_flagged).length !== 1 ? 's' : ''}</strong>
+                <span className="flagged-subtext">Cards marked as difficult</span>
+              </div>
+            </div>
+            <button
+              className="btn-create-set"
+              onClick={createSetFromFlagged}
+            >
+              <span className="btn-icon">📚</span>
+              Create Set from Flagged Cards
+            </button>
           </div>
-          <button
-            className="btn-primary"
-            onClick={createSetFromFlagged}
-          >
-            Create Set from Flagged Cards
-          </button>
+        </div>
+      )}
+
+      {selectedSet !== 'all' && selectedSet !== 'unassigned' && selectedSet !== 'flagged' && sets.find(s => s.id === selectedSet) && (
+        <div className="set-management-section">
+          <div className="set-management-header">
+            <div className="set-info">
+              <span className="set-icon-large">{sets.find(s => s.id === selectedSet)?.icon}</span>
+              <div>
+                <h3>{sets.find(s => s.id === selectedSet)?.name}</h3>
+                <p className="set-description">{sets.find(s => s.id === selectedSet)?.description}</p>
+              </div>
+            </div>
+            <div className="set-actions">
+              <button
+                className="btn-secondary btn-sm"
+                onClick={() => unflagCardsInSet(selectedSet, sets.find(s => s.id === selectedSet)?.name)}
+                title="Remove flag from all cards in this set"
+              >
+                🏳️ Unflag All Cards
+              </button>
+              <button
+                className="btn-danger btn-sm"
+                onClick={() => deleteSet(selectedSet, sets.find(s => s.id === selectedSet)?.name)}
+                title="Delete this set (cards will be unassigned, not deleted)"
+              >
+                🗑️ Delete Set
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

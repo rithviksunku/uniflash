@@ -1341,15 +1341,14 @@
 
 /* Flagged Section in FlashcardList */
 .flagged-section {
-  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-  border: 2px solid #ef4444;
-  border-radius: 12px;
-  padding: 20px;
-  margin: 20px 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  background: linear-gradient(135deg, #fff5f5 0%, #ffe4e6 100%);
+  border: 2px solid #fca5a5;
+  border-radius: 16px;
+  padding: 0;
+  margin: 24px 0;
+  overflow: hidden;
   animation: slideDown 0.3s ease-out;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1);
 }
 
 @keyframes slideDown {
@@ -1363,10 +1362,117 @@
   }
 }
 
+.flagged-section-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px;
+  gap: 20px;
+}
+
 .flagged-info {
-  font-size: 1.1rem;
-  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.flagged-icon {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
+.flagged-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.flagged-text strong {
+  font-size: 1.2rem;
   color: #991b1b;
+}
+
+.flagged-subtext {
+  font-size: 0.9rem;
+  color: #dc2626;
+  opacity: 0.8;
+}
+
+.btn-create-set {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: none;
+  padding: 14px 24px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  white-space: nowrap;
+}
+
+.btn-create-set:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+}
+
+.btn-create-set:active {
+  transform: translateY(0);
+}
+
+.btn-icon {
+  font-size: 1.2rem;
+}
+
+/* Set Management Section */
+.set-management-section {
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 16px;
+  margin: 24px 0;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.set-management-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px;
+  gap: 20px;
+}
+
+.set-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.set-icon-large {
+  font-size: 3rem;
+  line-height: 1;
+}
+
+.set-info h3 {
+  margin: 0 0 4px 0;
+  font-size: 1.5rem;
+  color: #1f2937;
+}
+
+.set-description {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+.set-actions {
+  display: flex;
+  gap: 12px;
 }
 
 .card-header-badges {
@@ -1398,10 +1504,39 @@
 }
 
 @media (max-width: 768px) {
-  .flagged-section {
+  .flagged-section-content {
     flex-direction: column;
-    gap: 12px;
+    gap: 16px;
     text-align: center;
+  }
+
+  .flagged-info {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .btn-create-set {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .set-management-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .set-info {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .set-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .set-actions button {
+    width: 100%;
   }
 
   .secondary-actions {
