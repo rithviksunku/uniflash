@@ -11,6 +11,8 @@ const FlashcardList = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sets, setSets] = useState([]);
   const [selectedSet, setSelectedSet] = useState('all');
+  const [showCreateSetModal, setShowCreateSetModal] = useState(false);
+  const [newSetName, setNewSetName] = useState('');
 
   useEffect(() => {
     fetchFlashcards();
@@ -289,7 +291,7 @@ const FlashcardList = () => {
     }
   };
 
-  const createSetFromFlagged = async () => {
+  const openCreateSetModal = () => {
     const flaggedCards = flashcards.filter(card => card.is_flagged);
 
     if (flaggedCards.length === 0) {
@@ -297,18 +299,23 @@ const FlashcardList = () => {
       return;
     }
 
-    const setName = prompt(
-      `Create a new set from ${flaggedCards.length} flagged card(s).\n\nEnter a name for this set:`,
-      'Difficult Cards'
-    );
+    setNewSetName('Difficult Cards');
+    setShowCreateSetModal(true);
+  };
 
-    if (!setName) return;
+  const createSetFromFlagged = async () => {
+    if (!newSetName.trim()) {
+      alert('Please enter a name for the set.');
+      return;
+    }
+
+    const flaggedCards = flashcards.filter(card => card.is_flagged);
 
     // Create the new set
     const { data: newSet, error: setError } = await supabase
       .from('flashcard_sets')
       .insert([{
-        name: setName,
+        name: newSetName.trim(),
         description: 'Collection of flagged difficult cards',
         color: '#ef4444',
         icon: '🚩'
@@ -332,8 +339,10 @@ const FlashcardList = () => {
       return;
     }
 
-    // Show success message
-    alert(`✅ Set "${setName}" created successfully with ${flaggedCards.length} cards!\n\nYou can unflag cards anytime from the flashcard list.`);
+    // Close modal and show success
+    setShowCreateSetModal(false);
+    setNewSetName('');
+    alert(`✅ Set "${newSetName.trim()}" created successfully with ${flaggedCards.length} cards!\n\nYou can unflag cards anytime from the flashcard list.`);
 
     // Refresh the flashcards list
     fetchFlashcards();
@@ -442,7 +451,7 @@ const FlashcardList = () => {
             </div>
             <button
               className="btn-create-set"
-              onClick={createSetFromFlagged}
+              onClick={openCreateSetModal}
             >
               <span className="btn-icon">📚</span>
               Create Set from Flagged Cards
@@ -606,6 +615,62 @@ const FlashcardList = () => {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Create Set Modal */}
+      {showCreateSetModal && (
+        <div className="modal-overlay" onClick={() => setShowCreateSetModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>📚 Create New Set</h2>
+              <button
+                className="modal-close"
+                onClick={() => setShowCreateSetModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <p className="modal-description">
+                Create a new set from {flashcards.filter(card => card.is_flagged).length} flagged card{flashcards.filter(card => card.is_flagged).length !== 1 ? 's' : ''}
+              </p>
+
+              <div className="modal-form-group">
+                <label htmlFor="set-name">Set Name</label>
+                <input
+                  id="set-name"
+                  type="text"
+                  value={newSetName}
+                  onChange={(e) => setNewSetName(e.target.value)}
+                  placeholder="Enter set name..."
+                  className="modal-input"
+                  autoFocus
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      createSetFromFlagged();
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                className="btn-secondary"
+                onClick={() => setShowCreateSetModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={createSetFromFlagged}
+              >
+                Create Set
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
