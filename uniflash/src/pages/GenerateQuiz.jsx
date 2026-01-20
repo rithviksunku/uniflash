@@ -1,29 +1,72 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import { generateQuizFromFlashcards, generateQuizFromSlides } from '../services/openai';
 
 const GenerateQuiz = () => {
   const navigate = useNavigate();
   const [source, setSource] = useState('flashcards');
   const [flashcards, setFlashcards] = useState([]);
   const [slides, setSlides] = useState([]);
+  const [sets, setSets] = useState([]);
+  const [selectedSets, setSelectedSets] = useState([]);
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [questionCount, setQuestionCount] = useState(5);
   const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState(null);
+  const [showSetSelector, setShowSetSelector] = useState(false);
 
   useEffect(() => {
-    fetchFlashcards();
+    fetchSets();
     fetchSlides();
   }, []);
 
-  const fetchFlashcards = async () => {
+  useEffect(() => {
+    if (source === 'flashcards') {
+      fetchFlashcards();
+    }
+  }, [selectedSets, source]);
+
+  const fetchSets = async () => {
     const { data, error } = await supabase
-      .from('flashcards')
+      .from('flashcard_sets')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('name');
 
     if (!error) {
-      setFlashcards(data);
+      setSets(data || []);
+    }
+  };
+
+  const fetchFlashcards = async () => {
+    let query = supabase
+      .from('flashcards')
+      .select(`
+        *,
+        flashcard_sets (
+          name,
+          color,
+          icon
+        )
+      `);
+
+    // Filter by selected sets if any
+    if (selectedSets.length > 0) {
+      query = query.in('set_id', selectedSets);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+
+    if (!error) {
+      setFlashcards(data || []);
+    }
+  };
+
+  const toggleSetSelection = (setId) => {
+    if (selectedSets.includes(setId)) {
+      setSelectedSets(selectedSets.filter(id => id !== setId));
+    } else {
+      setSelectedSets([...selectedSets, setId]);
     }
   };
 
@@ -67,39 +110,46 @@ const GenerateQuiz = () => {
 
     setGenerating(true);
 
-    const selectedIds = Array.from(selectedItems);
-    let sourceData;
+    try {
+      const selectedIds = Array.from(selectedItems);
+      let sourceData;
+      let questions;
 
-    if (source === 'flashcards') {
-      const { data } = await supabase
-        .from('flashcards')
-        .select('*')
-        .in('id', selectedIds);
-      sourceData = data;
-    } else {
-      const { data } = await supabase
-        .from('slides')
-        .select('*')
-        .in('id', selectedIds);
-      sourceData = data;
-    }
+      if (source === 'flashcards') {
+        const { data } = await supabase
+          .from('flashcards')
+          .select('*')
+          .in('id', selectedIds);
+        sourceData = data;
 
-    // Generate quiz questions
-    const questions = generateQuestions(sourceData, questionCount, source);
+        // Use OpenAI to generate quiz questions from flashcards
+        questions = await generateQuizFromFlashcards(sourceData, questionCount);
+      } else {
+        const { data } = await supabase
+          .from('slides')
+          .select('*')
+          .in('id', selectedIds);
+        sourceData = data;
 
-    // Save quiz to database
-    const { data: quiz, error: quizError } = await supabase
-      .from('quizzes')
-      .insert([
-        {
-          title: `Quiz - ${new Date().toLocaleDateString()}`,
-          created_at: new Date().toISOString(),
-        }
-      ])
-      .select()
-      .single();
+        // Use OpenAI to generate quiz questions from slides
+        questions = await generateQuizFromSlides(sourceData, questionCount);
+      }
 
-    if (!quizError) {
+      // Save quiz to database
+      const { data: quiz, error: quizError } = await supabase
+        .from('quizzes')
+        .insert([
+          {
+            title: `Quiz - ${new Date().toLocaleDateString()}`,
+            question_count: questions.length,
+            created_at: new Date().toISOString(),
+          }
+        ])
+        .select()
+        .single();
+
+      if (quizError) throw quizError;
+
       // Save questions
       const questionsToInsert = questions.map((q, idx) => ({
         quiz_id: quiz.id,
@@ -116,70 +166,11 @@ const GenerateQuiz = () => {
         .insert(questionsToInsert);
 
       navigate(`/quiz/${quiz.id}`);
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setGenerating(false);
     }
-
-    setGenerating(false);
-  };
-
-  const generateQuestions = (sourceData, count, type) => {
-    const questions = [];
-    const itemsToUse = sourceData.slice(0, Math.min(count, sourceData.length));
-
-    itemsToUse.forEach(item => {
-      let question, correctAnswer;
-
-      if (type === 'flashcards') {
-        question = item.front;
-        correctAnswer = item.back;
-      } else {
-        const lines = item.content.split('\n').filter(l => l.trim());
-        question = `${item.title}: What is covered in this slide?`;
-        correctAnswer = lines[0] || item.title;
-      }
-
-      // Generate distractors (simple version - you can enhance this)
-      const distractors = generateDistractors(correctAnswer, sourceData, type);
-      const options = [correctAnswer, ...distractors]
-        .sort(() => Math.random() - 0.5)
-        .slice(0, 4);
-
-      questions.push({
-        question,
-        correctAnswer,
-        options,
-        sourceId: item.id,
-      });
-    });
-
-    return questions;
-  };
-
-  const generateDistractors = (correctAnswer, allData, type) => {
-    const distractors = [];
-    const shuffled = [...allData].sort(() => Math.random() - 0.5);
-
-    for (const item of shuffled) {
-      if (distractors.length >= 3) break;
-
-      let distractor;
-      if (type === 'flashcards') {
-        distractor = item.back;
-      } else {
-        const lines = item.content.split('\n').filter(l => l.trim());
-        distractor = lines[0] || item.title;
-      }
-
-      if (distractor !== correctAnswer && !distractors.includes(distractor)) {
-        distractors.push(distractor);
-      }
-    }
-
-    // Fill remaining with generic distractors if needed
-    while (distractors.length < 3) {
-      distractors.push(`Option ${distractors.length + 1}`);
-    }
-
-    return distractors;
   };
 
   const items = source === 'flashcards' ? flashcards : slides;
@@ -188,8 +179,14 @@ const GenerateQuiz = () => {
     <div className="generate-quiz">
       <div className="quiz-header">
         <h1>🎯 Generate Quiz</h1>
-        <p>Create a multiple-choice quiz from your content</p>
+        <p>Create a multiple-choice quiz from your content using AI</p>
       </div>
+
+      {error && (
+        <div className="error-message">
+          ⚠️ {error}
+        </div>
+      )}
 
       <div className="quiz-config">
         <div className="config-section">
@@ -216,6 +213,17 @@ const GenerateQuiz = () => {
           </div>
         </div>
 
+        {source === 'flashcards' && (
+          <div className="config-section">
+            <button
+              className="btn-secondary"
+              onClick={() => setShowSetSelector(!showSetSelector)}
+            >
+              📚 Filter by Sets {selectedSets.length > 0 && `(${selectedSets.length})`}
+            </button>
+          </div>
+        )}
+
         <div className="config-section">
           <label htmlFor="question-count">Number of Questions:</label>
           <input
@@ -228,6 +236,38 @@ const GenerateQuiz = () => {
           />
         </div>
       </div>
+
+      {showSetSelector && source === 'flashcards' && (
+        <div className="set-selector">
+          <h3>Select Sets to Include:</h3>
+          <div className="set-filter-list">
+            {sets.map(set => (
+              <div
+                key={set.id}
+                className={`set-filter-item ${selectedSets.includes(set.id) ? 'selected' : ''}`}
+                onClick={() => toggleSetSelection(set.id)}
+                style={{ borderLeft: `4px solid ${set.color}` }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedSets.includes(set.id)}
+                  onChange={() => {}}
+                />
+                <span className="set-icon">{set.icon}</span>
+                <span className="set-name">{set.name}</span>
+              </div>
+            ))}
+          </div>
+          {selectedSets.length > 0 && (
+            <button
+              className="btn-text"
+              onClick={() => setSelectedSets([])}
+            >
+              Clear All Sets
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="selection-actions">
         <div className="selection-info">

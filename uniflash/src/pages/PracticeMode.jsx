@@ -18,38 +18,15 @@ const PracticeMode = () => {
   }, []);
 
   const fetchFlashcardSets = async () => {
-    // Fetch unique slide sources as "sets"
     const { data, error } = await supabase
-      .from('flashcards')
-      .select(`
-        slides (
-          id,
-          title,
-          presentation_id,
-          presentations (
-            title
-          )
-        )
-      `)
-      .not('slide_id', 'is', null);
+      .from('flashcard_sets')
+      .select('*')
+      .order('name');
 
-    if (!error && data) {
-      // Group by presentation
-      const presentations = new Map();
-      data.forEach(item => {
-        if (item.slides?.presentations) {
-          const presId = item.slides.presentation_id;
-          if (!presentations.has(presId)) {
-            presentations.set(presId, {
-              id: presId,
-              title: item.slides.presentations.title,
-            });
-          }
-        }
-      });
+    if (!error) {
       setFlashcardSets([
-        { id: 'all', title: 'All Flashcards' },
-        ...Array.from(presentations.values())
+        { id: 'all', name: 'All Flashcards', icon: '📚' },
+        ...(data || [])
       ]);
     }
     setLoading(false);
@@ -74,16 +51,12 @@ const PracticeMode = () => {
 
     const { data, error } = await supabase
       .from('flashcards')
-      .select(`
-        *,
-        slides!inner (
-          presentation_id
-        )
-      `)
-      .eq('slides.presentation_id', setId);
+      .select('*')
+      .eq('set_id', setId)
+      .order('created_at', { ascending: false });
 
     if (!error) {
-      setCards(data);
+      setCards(data || []);
     }
   };
 
@@ -120,6 +93,51 @@ const PracticeMode = () => {
     }
   };
 
+  const toggleFlag = async (cardId, currentFlagStatus) => {
+    const { error } = await supabase
+      .from('flashcards')
+      .update({ is_flagged: !currentFlagStatus })
+      .eq('id', cardId);
+
+    if (!error) {
+      // Update local state
+      setCards(cards.map(card =>
+        card.id === cardId
+          ? { ...card, is_flagged: !currentFlagStatus }
+          : card
+      ));
+    }
+  };
+
+  // Keyboard shortcuts for practice mode
+  useEffect(() => {
+    if (!isPracticing) return;
+
+    const handleKeyPress = (e) => {
+      // Prevent default for spacebar to avoid page scroll
+      if (e.key === ' ') {
+        e.preventDefault();
+        if (!showAnswer) {
+          setShowAnswer(true);
+        }
+      }
+
+      // Arrow keys for navigation
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        handleNext();
+      }
+
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handlePrevious();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [isPracticing, showAnswer, currentIndex, cards.length]);
+
   if (loading) {
     return <div className="loading">Loading flashcards...</div>;
   }
@@ -142,7 +160,7 @@ const PracticeMode = () => {
           >
             {flashcardSets.map(set => (
               <option key={set.id} value={set.id}>
-                {set.title}
+                {set.icon} {set.name}
               </option>
             ))}
           </select>
@@ -198,45 +216,64 @@ const PracticeMode = () => {
         </div>
       </div>
 
-      <div className="practice-card">
-        <div className="card-front">
-          <div className="card-label">Question:</div>
-          <div className="card-text">{currentCard.front}</div>
-        </div>
-
-        {showAnswer && (
-          <div className="card-back">
-            <div className="card-label">Answer:</div>
-            <div className="card-text">{currentCard.back}</div>
+      <div className="practice-card-container">
+        <div className="practice-card-large" onClick={() => !showAnswer && setShowAnswer(true)}>
+          <div className="card-front-practice">
+            <div className="card-label-practice">Question</div>
+            <div className="card-text-practice">{currentCard.front}</div>
           </div>
-        )}
 
-        <div className="practice-actions">
-          {!showAnswer ? (
-            <button
-              className="btn-primary btn-large"
-              onClick={() => setShowAnswer(true)}
-            >
-              Show Answer
-            </button>
-          ) : (
-            <div className="navigation-buttons">
-              <button
-                className="btn-secondary"
-                onClick={handlePrevious}
-                disabled={currentIndex === 0}
-              >
-                ← Previous
-              </button>
-              <button
-                className="btn-primary"
-                onClick={handleNext}
-              >
-                {currentIndex === cards.length - 1 ? 'Finish' : 'Next →'}
-              </button>
+          {showAnswer && (
+            <div className="card-back-practice">
+              <div className="divider-practice">•••</div>
+              <div className="card-label-practice">Answer</div>
+              <div className="card-text-practice">{currentCard.back}</div>
+            </div>
+          )}
+
+          {!showAnswer && (
+            <div className="tap-hint">
+              👆 Tap anywhere or press <kbd>Space</kbd> to reveal answer
             </div>
           )}
         </div>
+
+        <button
+          className={`flag-btn ${currentCard.is_flagged ? 'flagged' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleFlag(currentCard.id, currentCard.is_flagged);
+          }}
+          title={currentCard.is_flagged ? 'Unflag this card' : 'Flag as difficult'}
+        >
+          {currentCard.is_flagged ? '🚩 Flagged' : '🏳️ Flag'}
+        </button>
+      </div>
+
+      <div className="practice-controls">
+        {showAnswer && (
+          <>
+            <div className="keyboard-hints-practice">
+              <span>←  Previous</span>
+              <span>→  Next</span>
+            </div>
+            <div className="navigation-buttons-large">
+              <button
+                className="btn-nav btn-prev"
+                onClick={handlePrevious}
+                disabled={currentIndex === 0}
+              >
+                ← Previous Card
+              </button>
+              <button
+                className="btn-nav btn-next"
+                onClick={handleNext}
+              >
+                {currentIndex === cards.length - 1 ? '✓ Finish Practice' : 'Next Card →'}
+              </button>
+            </div>
+          </>
+        )}
 
         <button
           className="btn-text"

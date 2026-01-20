@@ -1,14 +1,20 @@
 .App {
   min-height: 100vh;
   display: flex;
-  flex-direction: column;
+}
+
+.main-content {
+  flex: 1;
+  margin-left: 280px;
   padding: 2rem;
   max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
 }
 
 @media (max-width: 768px) {
-  .App {
+  .main-content {
+    margin-left: 0;
+    margin-top: 80px;
     padding: 1rem;
   }
 }
@@ -1277,5 +1283,133 @@
 
   .selection-buttons {
     justify-content: stretch;
+  }
+}
+
+/* Flag Button Styles */
+.flag-btn {
+  background: transparent;
+  border: 2px solid #cbd5e0;
+  color: #4a5568;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.flag-btn:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+  background: #fef2f2;
+}
+
+.flag-btn.flagged {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: white;
+}
+
+.flag-btn.flagged:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+/* Practice Card Container */
+.practice-card-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+/* Review Card Container */
+.review-card-container {
+  width: 100%;
+}
+
+.secondary-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+/* Flagged Section in FlashcardList */
+.flagged-section {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border: 2px solid #ef4444;
+  border-radius: 12px;
+  padding: 20px;
+  margin: 20px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.flagged-info {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #991b1b;
+}
+
+.card-header-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.card-flag-badge {
+  background: #ef4444;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
+/* Logout button styling */
+.nav-logout-btn {
+  margin-top: 8px;
+  opacity: 0.7;
+}
+
+.nav-logout-btn:hover {
+  opacity: 1;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+@media (max-width: 768px) {
+  .flagged-section {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
+
+  .secondary-actions {
+    width: 100%;
+  }
+
+  .flag-btn {
+    width: 100%;
+    justify-content: center;
   }
 }

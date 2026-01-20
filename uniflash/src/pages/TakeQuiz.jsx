@@ -86,6 +86,7 @@ const TakeQuiz = () => {
         {
           quiz_id: quizId,
           score: score,
+          total_questions: questions.length,
           answers: finalAnswers,
           completed_at: new Date().toISOString(),
         }
@@ -93,7 +94,13 @@ const TakeQuiz = () => {
       .select()
       .single();
 
-    if (!error) {
+    if (error) {
+      console.error('Error submitting quiz:', error);
+      alert(`Failed to submit quiz: ${error.message}\n\nPlease run the ADD_QUIZ_COLUMNS.sql migration in your Supabase dashboard.`);
+      return;
+    }
+
+    if (attempt) {
       navigate(`/quiz/${quizId}/results/${attempt.id}`);
     }
   };

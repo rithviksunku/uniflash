@@ -96,7 +96,16 @@ const Dashboard = () => {
         >
           <span className="action-icon">📤</span>
           <h3>Upload Slides</h3>
-          <p>Import PowerPoint</p>
+          <p>Import PowerPoint or PDF</p>
+        </button>
+
+        <button
+          className="action-card"
+          onClick={() => navigate('/presentations')}
+        >
+          <span className="action-icon">📚</span>
+          <h3>My Presentations</h3>
+          <p>View and manage files</p>
         </button>
 
         <button
@@ -115,6 +124,15 @@ const Dashboard = () => {
           <span className="action-icon">🎯</span>
           <h3>Generate Quiz</h3>
           <p>Test your knowledge</p>
+        </button>
+
+        <button
+          className="action-card"
+          onClick={() => navigate('/quiz/history')}
+        >
+          <span className="action-icon">📊</span>
+          <h3>Quiz History</h3>
+          <p>View and retake quizzes</p>
         </button>
 
         <button

@@ -177,3 +177,210 @@ CREATE POLICY "Public access" ON quiz_attempts FOR ALL TO public USING (true);
 - Quiz questions store their options as JSONB for flexibility
 - Review sessions track time spent (excluding idle time should be handled in the frontend)
 - All timestamps use `TIMESTAMP WITH TIME ZONE` for proper timezone handling
+
+---
+
+## MIGRATION GUIDE - Healthcare Student Edition
+
+### 🚀 Quick Migration Steps
+
+1. **Backup Your Database** (Recommended)
+   - Go to Supabase Dashboard → Database → Backups
+   - Create a manual backup before proceeding
+
+2. **Run Migration SQL**
+   - Open `DATABASE_MIGRATION.sql` file
+   - Copy entire contents
+   - Go to Supabase SQL Editor
+   - Paste and click **Run**
+
+3. **Verify Success**
+   - Check for "✅ Migration completed successfully!" message
+   - Verify 5 default sets created
+
+### ✨ New Features After Migration
+
+#### **Flashcard Sets** - Organize by Topic
+Students can now create sets like:
+- "Anatomy Chapter 5"
+- "Pharmacology Exam 2"
+- "Clinical Skills Practice"
+
+#### **Performance Tracking**
+- Success rate per card
+- Times reviewed/correct
+- Identify difficult cards automatically
+
+#### **Study Streaks**
+- Track consecutive days studied
+- Motivation through gamification
+- See longest streak
+
+#### **PDF Support**
+- Upload PDF lecture notes
+- AI extracts key concepts
+- Same workflow as PowerPoint
+
+---
+
+## New Table Structures
+
+### flashcard_sets
+```sql
+id          | UUID    | Primary key
+name        | TEXT    | "Anatomy Chapter 5"
+description | TEXT    | "Cardiovascular system"
+color       | TEXT    | "#ef4444" (red)
+icon        | TEXT    | "🫀" (heart emoji)
+created_at  | TIMESTAMP
+updated_at  | TIMESTAMP | Auto-updated
+```
+
+### flashcards (NEW COLUMNS)
+```sql
+set_id         | UUID    | Links to flashcard_sets
+tags           | TEXT[]  | ["exam1", "difficult"]
+difficulty     | TEXT    | "easy" | "medium" | "hard"
+notes          | TEXT    | Personal study notes
+times_reviewed | INTEGER | Performance tracking
+times_correct  | INTEGER | Success tracking
+```
+
+### study_streaks
+```sql
+current_streak  | INTEGER | Days in a row
+longest_streak  | INTEGER | Best streak ever
+last_study_date | DATE    | Last study day
+```
+
+---
+
+## Default Healthcare Sets
+
+After migration, you'll have these pre-created sets:
+
+| Set | Icon | Color | Description |
+|-----|------|-------|-------------|
+| Anatomy | 🫀 | Red | Body systems & structures |
+| Physiology | ⚡ | Blue | Body functions |
+| Pharmacology | 💊 | Green | Medications & drugs |
+| Pathology | 🦠 | Purple | Disease processes |
+| Clinical Skills | 🩺 | Orange | Patient care |
+
+---
+
+## Usage Examples
+
+### Create a New Set
+```javascript
+const { data } = await supabase
+  .from('flashcard_sets')
+  .insert([{
+    name: 'Cardiology Exam 1',
+    description: 'Heart anatomy and physiology',
+    color: '#ef4444',
+    icon: '❤️'
+  }])
+  .select()
+  .single();
+```
+
+### Assign Flashcard to Set
+```javascript
+await supabase
+  .from('flashcards')
+  .update({ set_id: setId })
+  .eq('id', flashcardId);
+```
+
+### Get Cards from Multiple Sets
+```javascript
+const { data } = await supabase
+  .from('flashcards')
+  .select('*, flashcard_sets(name, color)')
+  .in('set_id', [setId1, setId2])
+  .lte('next_review', new Date().toISOString());
+```
+
+### Check Study Streak
+```javascript
+const { data } = await supabase
+  .from('study_streaks')
+  .select('*')
+  .is('user_id', null)
+  .single();
+
+// Returns: { current_streak: 5, longest_streak: 12, ... }
+```
+
+---
+
+## Migration Checklist
+
+After running `DATABASE_MIGRATION.sql`:
+
+- [ ] 5 default sets visible in flashcard_sets table
+- [ ] flashcards table has new columns (set_id, tags, etc.)
+- [ ] presentations table has file_type column
+- [ ] study_streaks table created
+- [ ] shared_sets table created (for future)
+- [ ] Views created (flashcard_set_stats, difficult_flashcards)
+- [ ] No SQL errors in output
+- [ ] Test creating a new set
+- [ ] Test assigning flashcard to set
+- [ ] Test viewing set statistics
+
+---
+
+## Troubleshooting
+
+### Error: "relation already exists"
+- ✅ This is OK! It means tables already exist
+- Migration uses `IF NOT EXISTS` to be safe
+
+### Error: "column already exists"
+- ✅ This is OK! Migration checks before adding
+- Your database is likely up to date
+
+### No Default Sets Created
+```sql
+-- Manually insert if needed:
+INSERT INTO flashcard_sets (name, description, color, icon)
+VALUES
+  ('Anatomy', 'Human anatomy', '#ef4444', '🫀'),
+  ('Physiology', 'Body functions', '#3b82f6', '⚡'),
+  ('Pharmacology', 'Medications', '#10b981', '💊'),
+  ('Pathology', 'Diseases', '#8b5cf6', '🦠'),
+  ('Clinical Skills', 'Patient care', '#f59e0b', '🩺');
+```
+
+### Rollback Migration
+See rollback SQL in DATABASE_MIGRATION.sql comments
+
+---
+
+## Performance Notes
+
+### Indexes Created
+- Fast lookups by set
+- Fast filtered reviews
+- Fast tag searches
+- Optimized for healthcare student workflows
+
+### Auto-Updated Fields
+- `updated_at` on sets and presentations
+- `study_streaks` after each review
+- Performance metrics on flashcards
+
+---
+
+## Next Steps
+
+1. ✅ Run migration
+2. Create FlashcardSets page (see IMPLEMENTATION_GUIDE.md)
+3. Update UploadSlides for PDF support
+4. Add AI grammar cleanup to CreateFlashcard
+5. Update Review to filter by sets
+6. Update Quiz generation for multi-set selection
+
+All code examples in **IMPLEMENTATION_GUIDE.md**!

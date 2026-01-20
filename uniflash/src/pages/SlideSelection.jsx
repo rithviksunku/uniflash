@@ -7,13 +7,33 @@ const SlideSelection = () => {
   const navigate = useNavigate();
   const [presentation, setPresentation] = useState(null);
   const [slides, setSlides] = useState([]);
+  const [filteredSlides, setFilteredSlides] = useState([]);
   const [selectedSlides, setSelectedSlides] = useState(new Set());
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchPresentation();
     fetchSlides();
   }, [presentationId]);
+
+  useEffect(() => {
+    filterSlides();
+  }, [slides, searchTerm]);
+
+  const filterSlides = () => {
+    if (!searchTerm.trim()) {
+      setFilteredSlides(slides);
+      return;
+    }
+
+    const search = searchTerm.toLowerCase();
+    const filtered = slides.filter(slide =>
+      slide.title?.toLowerCase().includes(search) ||
+      slide.content.toLowerCase().includes(search)
+    );
+    setFilteredSlides(filtered);
+  };
 
   const fetchPresentation = async () => {
     const { data, error } = await supabase
@@ -77,9 +97,20 @@ const SlideSelection = () => {
         <p>{presentation?.title}</p>
       </div>
 
+      <div className="search-section">
+        <input
+          type="text"
+          placeholder="🔍 Search slides by title or content..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="search-input"
+        />
+      </div>
+
       <div className="selection-actions">
         <div className="selection-info">
           {selectedSlides.size} of {slides.length} slides selected
+          {searchTerm && ` • Showing ${filteredSlides.length} matches`}
         </div>
         <div className="selection-buttons">
           <button onClick={selectAll} className="btn-secondary">
@@ -92,7 +123,7 @@ const SlideSelection = () => {
       </div>
 
       <div className="slides-grid">
-        {slides.map((slide) => (
+        {filteredSlides.map((slide) => (
           <div
             key={slide.id}
             className={`slide-card ${selectedSlides.has(slide.id) ? 'selected' : ''}`}

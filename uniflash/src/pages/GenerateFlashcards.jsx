@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import { generateFlashcardsFromSlides } from '../services/openai';
 
 const GenerateFlashcards = () => {
   const location = useLocation();
@@ -8,6 +9,9 @@ const GenerateFlashcards = () => {
   const { slideIds } = location.state || { slideIds: [] };
 
   const [slides, setSlides] = useState([]);
+  const [presentations, setPresentations] = useState([]);
+  const [selectedPresentation, setSelectedPresentation] = useState('all');
+  const [filteredSlides, setFilteredSlides] = useState([]);
   const [generating, setGenerating] = useState(false);
   const [generatedCards, setGeneratedCards] = useState([]);
   const [selectedCards, setSelectedCards] = useState(new Set());
@@ -15,8 +19,13 @@ const GenerateFlashcards = () => {
   useEffect(() => {
     if (slideIds.length > 0) {
       fetchSlides();
+      fetchPresentations();
     }
   }, [slideIds]);
+
+  useEffect(() => {
+    filterSlides();
+  }, [slides, selectedPresentation]);
 
   const fetchSlides = async () => {
     const { data, error } = await supabase
@@ -29,24 +38,46 @@ const GenerateFlashcards = () => {
     }
   };
 
+  const fetchPresentations = async () => {
+    const { data, error } = await supabase
+      .from('presentations')
+      .select('*')
+      .order('uploaded_at', { ascending: false });
+
+    if (!error) {
+      setPresentations(data || []);
+    }
+  };
+
+  const filterSlides = () => {
+    if (selectedPresentation === 'all') {
+      setFilteredSlides(slides);
+    } else {
+      setFilteredSlides(slides.filter(s => s.presentation_id === selectedPresentation));
+    }
+  };
+
   const handleGenerate = async () => {
     setGenerating(true);
 
-    // TODO: Replace with actual AI generation
-    // For now, create simple flashcards from slide content
-    const cards = slides.flatMap(slide => {
-      const lines = slide.content.split('\n').filter(line => line.trim());
-      return lines.slice(0, 3).map((line, idx) => ({
-        front: `${slide.title} - Question ${idx + 1}`,
-        back: line,
-        slide_id: slide.id,
-        tempId: `${slide.id}-${idx}`
-      }));
-    });
+    try {
+      // Use OpenAI to generate flashcards from filtered slides
+      const aiGeneratedCards = await generateFlashcardsFromSlides(filteredSlides);
 
-    setGeneratedCards(cards);
-    setSelectedCards(new Set(cards.map(c => c.tempId)));
-    setGenerating(false);
+      // Add temporary IDs for UI selection
+      const cards = aiGeneratedCards.map((card, idx) => ({
+        ...card,
+        tempId: `ai-${idx}`
+      }));
+
+      setGeneratedCards(cards);
+      setSelectedCards(new Set(cards.map(c => c.tempId)));
+    } catch (error) {
+      console.error('Error generating flashcards:', error);
+      alert(`Failed to generate flashcards: ${error.message}`);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const toggleCard = (tempId) => {
@@ -87,7 +118,22 @@ const GenerateFlashcards = () => {
     <div className="generate-flashcards">
       <div className="generate-header">
         <h1>🎴 Generate Flashcards</h1>
-        <p>Auto-generate flashcards from {slides.length} selected slides</p>
+        <p>Auto-generate flashcards from {filteredSlides.length} selected slides</p>
+      </div>
+
+      <div className="filter-section">
+        <label htmlFor="presentation-filter">Filter by Presentation:</label>
+        <select
+          id="presentation-filter"
+          value={selectedPresentation}
+          onChange={(e) => setSelectedPresentation(e.target.value)}
+          className="filter-select"
+        >
+          <option value="all">All Presentations</option>
+          {presentations.map(p => (
+            <option key={p.id} value={p.id}>{p.title}</option>
+          ))}
+        </select>
       </div>
 
       {generatedCards.length === 0 ? (
@@ -96,7 +142,7 @@ const GenerateFlashcards = () => {
           <button
             className="btn-primary"
             onClick={handleGenerate}
-            disabled={generating || slides.length === 0}
+            disabled={generating || filteredSlides.length === 0}
           >
             {generating ? 'Generating...' : '✨ Generate Flashcards'}
           </button>

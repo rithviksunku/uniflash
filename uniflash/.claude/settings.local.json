@@ -7,7 +7,12 @@
       "Bash(then cp .env.example .env)",
       "Bash(else echo \".env already exists\")",
       "Bash(fi)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(if [ -f .env ])",
+      "Bash(then echo \".env exists\")",
+      "Bash(else echo \".env does not exist\")",
+      "Bash(npm run build:*)",
+      "Bash(npm install:*)"
     ]
   }
 }
