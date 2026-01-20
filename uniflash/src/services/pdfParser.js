@@ -1,8 +1,13 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import OpenAI from 'openai';
 
-// Set up PDF.js worker - using unpkg for better reliability
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+// Set up PDF.js worker using a synchronous approach
+// Using the jsdelivr CDN which is more reliable than unpkg
+// Matching exact version to prevent compatibility issues
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+
+console.log('PDF.js version:', pdfjsLib.version);
+console.log('Worker source set to:', pdfjsLib.GlobalWorkerOptions.workerSrc);
 
 /**
  * Parse a PDF file and extract text content
@@ -11,6 +16,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLi
  */
 export const parsePDF = async (file) => {
   try {
+    console.log('Starting PDF parse for file:', file.name, 'Size:', file.size, 'Type:', file.type);
+
     // Validate file
     if (!file || !file.arrayBuffer) {
       throw new Error('Invalid PDF file provided');
@@ -24,15 +31,17 @@ export const parsePDF = async (file) => {
     }
 
     console.log('Loading PDF with', arrayBuffer.byteLength, 'bytes');
+    console.log('Worker configured at:', pdfjsLib.GlobalWorkerOptions.workerSrc);
 
     const loadingTask = pdfjsLib.getDocument({
       data: arrayBuffer,
       useWorkerFetch: false,
       isEvalSupported: false,
       useSystemFonts: true,
-      verbosity: 0
+      verbosity: 1 // Increase verbosity to see more details
     });
 
+    console.log('PDF loading task created, waiting for promise...');
     const pdf = await loadingTask.promise;
     console.log('PDF loaded successfully, pages:', pdf.numPages);
 
