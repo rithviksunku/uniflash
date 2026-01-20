@@ -10,6 +10,7 @@ import FlashcardSets from './pages/FlashcardSets';
 import FlashcardList from './pages/FlashcardList';
 import CreateFlashcard from './pages/CreateFlashcard';
 import GenerateFlashcards from './pages/GenerateFlashcards';
+import InteractiveFlashcardEditor from './pages/InteractiveFlashcardEditor';
 import Review from './pages/Review';
 import PracticeMode from './pages/PracticeMode';
 import GenerateQuiz from './pages/GenerateQuiz';
@@ -18,6 +19,7 @@ import QuizResults from './pages/QuizResults';
 import QuizHistory from './pages/QuizHistory';
 import Help from './pages/Help';
 import './styles/App.css';
+import './styles/InteractiveEditor.css';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -62,6 +64,7 @@ function App() {
             <Route path="/flashcards" element={<FlashcardList />} />
             <Route path="/flashcards/create" element={<CreateFlashcard />} />
             <Route path="/flashcards/generate" element={<GenerateFlashcards />} />
+            <Route path="/flashcards/editor" element={<InteractiveFlashcardEditor />} />
             <Route path="/flashcards/practice" element={<PracticeMode />} />
 
             {/* Review Routes */}

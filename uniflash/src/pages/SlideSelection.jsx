@@ -81,7 +81,7 @@ const SlideSelection = () => {
   const handleGenerateFlashcards = async () => {
     if (selectedSlides.size === 0) return;
 
-    navigate('/flashcards/generate', {
+    navigate('/flashcards/editor', {
       state: { slideIds: Array.from(selectedSlides) }
     });
   };
