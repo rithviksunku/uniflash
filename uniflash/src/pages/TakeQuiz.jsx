@@ -77,15 +77,14 @@ const TakeQuiz = () => {
     };
 
     const correctCount = Object.values(finalAnswers).filter(a => a.correct).length;
-    const score = Math.round((correctCount / questions.length) * 100);
 
-    // Save quiz attempt
+    // Save quiz attempt (score should be the number correct, not percentage)
     const { data: attempt, error } = await supabase
       .from('quiz_attempts')
       .insert([
         {
           quiz_id: quizId,
-          score: score,
+          score: correctCount,
           total_questions: questions.length,
           answers: finalAnswers,
           completed_at: new Date().toISOString(),

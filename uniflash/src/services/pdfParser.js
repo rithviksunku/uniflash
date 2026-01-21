@@ -173,7 +173,13 @@ Return ONLY a JSON array with this structure (no markdown, no code blocks):
       }
 
       const batchResults = JSON.parse(content);
-      structuredPages.push(...batchResults);
+      // Ensure batchResults is an array before spreading
+      if (Array.isArray(batchResults)) {
+        structuredPages.push(...batchResults);
+      } else if (batchResults && typeof batchResults === 'object') {
+        // If it's a single object, wrap it in an array
+        structuredPages.push(batchResults);
+      }
     }
 
     return structuredPages;

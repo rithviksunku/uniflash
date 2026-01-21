@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
-import { generateQuizFromFlashcards, generateQuizFromSlides } from '../services/openai';
+import { generateQuizFromFlashcards } from '../services/openai';
 
 const GenerateQuiz = () => {
   const navigate = useNavigate();
-  const [source, setSource] = useState('flashcards');
   const [flashcards, setFlashcards] = useState([]);
-  const [slides, setSlides] = useState([]);
   const [sets, setSets] = useState([]);
   const [selectedSets, setSelectedSets] = useState([]);
   const [selectedItems, setSelectedItems] = useState(new Set());
@@ -18,14 +16,12 @@ const GenerateQuiz = () => {
 
   useEffect(() => {
     fetchSets();
-    fetchSlides();
+    fetchFlashcards();
   }, []);
 
   useEffect(() => {
-    if (source === 'flashcards') {
-      fetchFlashcards();
-    }
-  }, [selectedSets, source]);
+    fetchFlashcards();
+  }, [selectedSets]);
 
   const fetchSets = async () => {
     const { data, error } = await supabase
@@ -70,22 +66,6 @@ const GenerateQuiz = () => {
     }
   };
 
-  const fetchSlides = async () => {
-    const { data, error } = await supabase
-      .from('slides')
-      .select(`
-        *,
-        presentations (
-          title
-        )
-      `)
-      .order('created_at', { ascending: false });
-
-    if (!error) {
-      setSlides(data);
-    }
-  };
-
   const toggleItem = (id) => {
     const newSelected = new Set(selectedItems);
     if (newSelected.has(id)) {
@@ -97,8 +77,7 @@ const GenerateQuiz = () => {
   };
 
   const selectAll = () => {
-    const items = source === 'flashcards' ? flashcards : slides;
-    setSelectedItems(new Set(items.map(item => item.id)));
+    setSelectedItems(new Set(flashcards.map(item => item.id)));
   };
 
   const deselectAll = () => {
@@ -112,28 +91,14 @@ const GenerateQuiz = () => {
 
     try {
       const selectedIds = Array.from(selectedItems);
-      let sourceData;
-      let questions;
 
-      if (source === 'flashcards') {
-        const { data } = await supabase
-          .from('flashcards')
-          .select('*')
-          .in('id', selectedIds);
-        sourceData = data;
+      const { data } = await supabase
+        .from('flashcards')
+        .select('*')
+        .in('id', selectedIds);
 
-        // Use OpenAI to generate quiz questions from flashcards
-        questions = await generateQuizFromFlashcards(sourceData, questionCount);
-      } else {
-        const { data } = await supabase
-          .from('slides')
-          .select('*')
-          .in('id', selectedIds);
-        sourceData = data;
-
-        // Use OpenAI to generate quiz questions from slides
-        questions = await generateQuizFromSlides(sourceData, questionCount);
-      }
+      // Use OpenAI to generate quiz questions from flashcards
+      const questions = await generateQuizFromFlashcards(data, questionCount);
 
       // Save quiz to database
       const { data: quiz, error: quizError } = await supabase
@@ -158,7 +123,7 @@ const GenerateQuiz = () => {
         correct_answer: q.correctAnswer,
         options: q.options,
         source_id: q.sourceId,
-        source_type: source === 'flashcards' ? 'flashcard' : 'slide',
+        source_type: 'flashcard',
       }));
 
       await supabase
@@ -173,13 +138,11 @@ const GenerateQuiz = () => {
     }
   };
 
-  const items = source === 'flashcards' ? flashcards : slides;
-
   return (
     <div className="generate-quiz">
       <div className="quiz-header">
         <h1>🎯 Generate Quiz</h1>
-        <p>Create a multiple-choice quiz from your content using AI</p>
+        <p>Create a multiple-choice quiz from your flashcards using AI</p>
       </div>
 
       {error && (
@@ -190,39 +153,13 @@ const GenerateQuiz = () => {
 
       <div className="quiz-config">
         <div className="config-section">
-          <label>Source:</label>
-          <div className="source-options">
-            <button
-              className={`source-btn ${source === 'flashcards' ? 'active' : ''}`}
-              onClick={() => {
-                setSource('flashcards');
-                setSelectedItems(new Set());
-              }}
-            >
-              🎴 Flashcards
-            </button>
-            <button
-              className={`source-btn ${source === 'slides' ? 'active' : ''}`}
-              onClick={() => {
-                setSource('slides');
-                setSelectedItems(new Set());
-              }}
-            >
-              📄 Slides
-            </button>
-          </div>
+          <button
+            className="btn-secondary"
+            onClick={() => setShowSetSelector(!showSetSelector)}
+          >
+            📚 Filter by Sets {selectedSets.length > 0 && `(${selectedSets.length})`}
+          </button>
         </div>
-
-        {source === 'flashcards' && (
-          <div className="config-section">
-            <button
-              className="btn-secondary"
-              onClick={() => setShowSetSelector(!showSetSelector)}
-            >
-              📚 Filter by Sets {selectedSets.length > 0 && `(${selectedSets.length})`}
-            </button>
-          </div>
-        )}
 
         <div className="config-section">
           <label htmlFor="question-count">Number of Questions:</label>
@@ -230,14 +167,14 @@ const GenerateQuiz = () => {
             id="question-count"
             type="number"
             min="1"
-            max={Math.min(20, items.length)}
+            max={Math.min(20, flashcards.length)}
             value={questionCount}
             onChange={(e) => setQuestionCount(parseInt(e.target.value))}
           />
         </div>
       </div>
 
-      {showSetSelector && source === 'flashcards' && (
+      {showSetSelector && (
         <div className="set-selector">
           <h3>Select Sets to Include:</h3>
           <div className="set-filter-list">
@@ -271,7 +208,7 @@ const GenerateQuiz = () => {
 
       <div className="selection-actions">
         <div className="selection-info">
-          {selectedItems.size} of {items.length} selected
+          {selectedItems.size} of {flashcards.length} flashcards selected
         </div>
         <div className="selection-buttons">
           <button onClick={selectAll} className="btn-secondary">
@@ -283,32 +220,38 @@ const GenerateQuiz = () => {
         </div>
       </div>
 
-      <div className="items-grid">
-        {items.map((item) => (
-          <div
-            key={item.id}
-            className={`item-card ${selectedItems.has(item.id) ? 'selected' : ''}`}
-            onClick={() => toggleItem(item.id)}
+      {flashcards.length === 0 ? (
+        <div className="empty-state">
+          <p>No flashcards available. Create some flashcards first!</p>
+          <button
+            className="btn-primary"
+            onClick={() => navigate('/flashcards/create')}
           >
-            {source === 'flashcards' ? (
-              <>
-                <div className="item-front">{item.front}</div>
-                <div className="item-back">{item.back}</div>
-              </>
-            ) : (
-              <>
-                <div className="item-title">{item.title}</div>
-                <div className="item-preview">
-                  {item.content.substring(0, 100)}...
+            ➕ Create Flashcards
+          </button>
+        </div>
+      ) : (
+        <div className="items-grid">
+          {flashcards.map((item) => (
+            <div
+              key={item.id}
+              className={`item-card ${selectedItems.has(item.id) ? 'selected' : ''}`}
+              onClick={() => toggleItem(item.id)}
+            >
+              <div className="item-front">{item.front}</div>
+              <div className="item-back">{item.back}</div>
+              {item.flashcard_sets && (
+                <div className="item-set-badge" style={{ borderLeft: `4px solid ${item.flashcard_sets.color}` }}>
+                  {item.flashcard_sets.icon} {item.flashcard_sets.name}
                 </div>
-              </>
-            )}
-            {selectedItems.has(item.id) && (
-              <div className="selected-indicator">✓</div>
-            )}
-          </div>
-        ))}
-      </div>
+              )}
+              {selectedItems.has(item.id) && (
+                <div className="selected-indicator">✓</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="quiz-footer">
         <button
