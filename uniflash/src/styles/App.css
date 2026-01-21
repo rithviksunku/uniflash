@@ -1801,6 +1801,106 @@
   margin-right: 0.5rem;
 }
 
+/* Practice Mode Multi-Set Selection */
+.set-selection-multi {
+  background: white;
+  border-radius: var(--radius-xl);
+  padding: 2rem;
+  box-shadow: var(--shadow);
+  margin-bottom: 2rem;
+}
+
+.set-selection-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #f3f4f6;
+}
+
+.set-selection-header h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.25rem;
+}
+
+.set-selection-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.sets-grid-practice {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.set-card-practice {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: var(--transition);
+  background: white;
+}
+
+.set-card-practice:hover {
+  border-color: #d1d5db;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.set-card-practice.selected {
+  border-color: #f59e0b;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+}
+
+.set-card-practice input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #f59e0b;
+  flex-shrink: 0;
+}
+
+.set-info-practice {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.set-icon-practice {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.set-details-practice {
+  flex: 1;
+}
+
+.set-name-practice {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.set-count-practice {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.empty-state-small {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
 /* Responsive modal */
 @media (max-width: 768px) {
   .modal-content {
@@ -1839,5 +1939,20 @@
   .banner-content {
     flex-direction: column;
     text-align: center;
+  }
+
+  .sets-grid-practice {
+    grid-template-columns: 1fr;
+  }
+
+  .set-selection-header {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  .set-selection-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 }

@@ -5,7 +5,7 @@ import { supabase } from '../services/supabase';
 const PracticeMode = () => {
   const navigate = useNavigate();
   const [flashcardSets, setFlashcardSets] = useState([]);
-  const [selectedSet, setSelectedSet] = useState('all');
+  const [selectedSets, setSelectedSets] = useState([]);
   const [cards, setCards] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
@@ -17,17 +17,18 @@ const PracticeMode = () => {
     fetchAllCards();
   }, []);
 
+  useEffect(() => {
+    fetchCardsBySelectedSets();
+  }, [selectedSets]);
+
   const fetchFlashcardSets = async () => {
     const { data, error } = await supabase
-      .from('flashcard_sets')
+      .from('flashcard_set_stats')
       .select('*')
       .order('name');
 
     if (!error) {
-      setFlashcardSets([
-        { id: 'all', name: 'All Flashcards', icon: '📚' },
-        ...(data || [])
-      ]);
+      setFlashcardSets(data || []);
     }
     setLoading(false);
   };
@@ -43,8 +44,9 @@ const PracticeMode = () => {
     }
   };
 
-  const fetchCardsBySet = async (setId) => {
-    if (setId === 'all') {
+  const fetchCardsBySelectedSets = async () => {
+    if (selectedSets.length === 0) {
+      // If no sets selected, show all cards
       fetchAllCards();
       return;
     }
@@ -52,7 +54,7 @@ const PracticeMode = () => {
     const { data, error } = await supabase
       .from('flashcards')
       .select('*')
-      .eq('set_id', setId)
+      .in('set_id', selectedSets)
       .order('created_at', { ascending: false });
 
     if (!error) {
@@ -60,12 +62,20 @@ const PracticeMode = () => {
     }
   };
 
-  const handleSetChange = (setId) => {
-    setSelectedSet(setId);
-    fetchCardsBySet(setId);
-    setIsPracticing(false);
-    setCurrentIndex(0);
-    setShowAnswer(false);
+  const toggleSetSelection = (setId) => {
+    if (selectedSets.includes(setId)) {
+      setSelectedSets(selectedSets.filter(id => id !== setId));
+    } else {
+      setSelectedSets([...selectedSets, setId]);
+    }
+  };
+
+  const selectAllSets = () => {
+    setSelectedSets(flashcardSets.map(set => set.id));
+  };
+
+  const clearAllSets = () => {
+    setSelectedSets([]);
   };
 
   const handleStartPractice = () => {
@@ -147,29 +157,62 @@ const PracticeMode = () => {
       <div className="practice-mode">
         <div className="practice-header">
           <h1>📖 Practice Mode</h1>
-          <p>Review flashcards without spaced repetition</p>
+          <p>Review flashcards without spaced repetition - select one or more sets to practice</p>
         </div>
 
-        <div className="set-selection">
-          <label htmlFor="set-select">Select a set:</label>
-          <select
-            id="set-select"
-            value={selectedSet}
-            onChange={(e) => handleSetChange(e.target.value)}
-            className="set-selector"
-          >
-            {flashcardSets.map(set => (
-              <option key={set.id} value={set.id}>
-                {set.icon} {set.name}
-              </option>
-            ))}
-          </select>
+        <div className="set-selection-multi">
+          <div className="set-selection-header">
+            <h3>Select Sets to Practice:</h3>
+            <div className="set-selection-actions">
+              <button className="btn-text" onClick={selectAllSets}>
+                Select All
+              </button>
+              <button className="btn-text" onClick={clearAllSets}>
+                Clear All
+              </button>
+            </div>
+          </div>
+
+          {flashcardSets.length === 0 ? (
+            <div className="empty-state-small">
+              <p>No flashcard sets yet. Create sets to organize your flashcards!</p>
+            </div>
+          ) : (
+            <div className="sets-grid-practice">
+              {flashcardSets.map(set => (
+                <div
+                  key={set.id}
+                  className={`set-card-practice ${selectedSets.includes(set.id) ? 'selected' : ''}`}
+                  onClick={() => toggleSetSelection(set.id)}
+                  style={{ borderLeft: `4px solid ${set.color}` }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedSets.includes(set.id)}
+                    onChange={() => {}}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <div className="set-info-practice">
+                    <span className="set-icon-practice">{set.icon}</span>
+                    <div className="set-details-practice">
+                      <div className="set-name-practice">{set.name}</div>
+                      <div className="set-count-practice">{set.total_cards || 0} cards</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="practice-info">
           <div className="info-card">
             <div className="info-number">{cards.length}</div>
-            <div className="info-label">Cards in this set</div>
+            <div className="info-label">
+              {selectedSets.length === 0 ? 'Total cards (all sets)' :
+               selectedSets.length === 1 ? 'Cards in selected set' :
+               `Cards in ${selectedSets.length} selected sets`}
+            </div>
           </div>
         </div>
 
