@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
 
 const MultiSetSelector = ({
@@ -11,6 +11,7 @@ const MultiSetSelector = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredSets, setFilteredSets] = useState(sets);
   const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef(null);
 
   useEffect(() => {
     if (searchTerm.trim()) {
@@ -23,6 +24,23 @@ const MultiSetSelector = ({
       setFilteredSets(sets);
     }
   }, [searchTerm, sets]);
+
+  // Handle click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    };
+
+    if (showDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDropdown]);
 
   const toggleSet = (setId) => {
     if (selectedSets.includes(setId)) {
@@ -51,7 +69,7 @@ const MultiSetSelector = ({
   const shouldShowSearch = showSearch && sets.length >= 10;
 
   return (
-    <div className="multi-set-selector">
+    <div className="multi-set-selector" ref={dropdownRef}>
       <label>{label}</label>
 
       <div className="set-selector-trigger" onClick={() => setShowDropdown(!showDropdown)}>
