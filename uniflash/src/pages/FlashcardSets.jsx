@@ -7,6 +7,7 @@ const FlashcardSets = () => {
   const [sets, setSets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedSetsForStudy, setSelectedSetsForStudy] = useState([]);
   const [newSet, setNewSet] = useState({
     name: '',
     description: '',
@@ -66,6 +67,30 @@ const FlashcardSets = () => {
     }
   };
 
+  const toggleSetSelection = (setId) => {
+    if (selectedSetsForStudy.includes(setId)) {
+      setSelectedSetsForStudy(selectedSetsForStudy.filter(id => id !== setId));
+    } else {
+      setSelectedSetsForStudy([...selectedSetsForStudy, setId]);
+    }
+  };
+
+  const startMultiSetStudy = () => {
+    if (selectedSetsForStudy.length === 0) {
+      alert('Please select at least one set to study');
+      return;
+    }
+    const setParams = selectedSetsForStudy.join(',');
+    navigate(`/review?sets=${setParams}`);
+  };
+
+  const getTotalDueCards = () => {
+    return selectedSetsForStudy.reduce((total, setId) => {
+      const set = sets.find(s => s.id === setId);
+      return total + (set?.due_cards || 0);
+    }, 0);
+  };
+
   if (loading) return <div className="loading">Loading sets...</div>;
 
   return (
@@ -75,10 +100,29 @@ const FlashcardSets = () => {
           <h1>📚 My Flashcard Sets</h1>
           <p className="subtitle">Organize your study materials by topic</p>
         </div>
-        <button className="btn-primary" onClick={() => setShowCreateModal(true)}>
-          ➕ Create New Set
-        </button>
+        <div className="header-actions">
+          {selectedSetsForStudy.length > 0 && (
+            <button className="btn-study-multi" onClick={startMultiSetStudy}>
+              🎯 Study {selectedSetsForStudy.length} Set{selectedSetsForStudy.length > 1 ? 's' : ''} ({getTotalDueCards()} cards)
+            </button>
+          )}
+          <button className="btn-primary" onClick={() => setShowCreateModal(true)}>
+            ➕ Create New Set
+          </button>
+        </div>
       </div>
+
+      {sets.length > 1 && (
+        <div className="multi-set-banner">
+          <div className="banner-content">
+            <span className="banner-icon">✨</span>
+            <div className="banner-text">
+              <strong>Study Multiple Sets Together!</strong>
+              <p>Click the checkboxes to select multiple sets and study them in a combined session</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {sets.length === 0 ? (
         <div className="empty-state">
@@ -92,10 +136,17 @@ const FlashcardSets = () => {
           {sets.map(set => (
             <div
               key={set.id}
-              className="set-card"
+              className={`set-card ${selectedSetsForStudy.includes(set.id) ? 'selected-for-study' : ''}`}
               style={{ borderLeft: `4px solid ${set.color}` }}
             >
               <div className="set-header">
+                <input
+                  type="checkbox"
+                  className="set-checkbox"
+                  checked={selectedSetsForStudy.includes(set.id)}
+                  onChange={() => toggleSetSelection(set.id)}
+                  onClick={(e) => e.stopPropagation()}
+                />
                 <span className="set-icon">{set.icon}</span>
                 <h3>{set.name}</h3>
               </div>
