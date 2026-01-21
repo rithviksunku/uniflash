@@ -11,6 +11,7 @@ import FlashcardList from './pages/FlashcardList';
 import CreateFlashcard from './pages/CreateFlashcard';
 import GenerateFlashcards from './pages/GenerateFlashcards';
 import InteractiveFlashcardEditor from './pages/InteractiveFlashcardEditor';
+import SlideFlashcardCreator from './pages/SlideFlashcardCreator';
 import Review from './pages/Review';
 import PracticeMode from './pages/PracticeMode';
 import GenerateQuiz from './pages/GenerateQuiz';
@@ -65,6 +66,7 @@ function App() {
             <Route path="/flashcards/create" element={<CreateFlashcard />} />
             <Route path="/flashcards/generate" element={<GenerateFlashcards />} />
             <Route path="/flashcards/editor" element={<InteractiveFlashcardEditor />} />
+            <Route path="/flashcards/from-slides" element={<SlideFlashcardCreator />} />
             <Route path="/flashcards/practice" element={<PracticeMode />} />
 
             {/* Review Routes */}
