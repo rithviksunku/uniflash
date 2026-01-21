@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { cleanupFlashcardGrammar } from '../services/openai';
+import MultiSetSelector from '../components/MultiSetSelector';
 
 const CreateFlashcard = () => {
   const navigate = useNavigate();
   const [front, setFront] = useState('');
   const [back, setBack] = useState('');
-  const [setId, setSetId] = useState('');
+  const [selectedSetIds, setSelectedSetIds] = useState([]);
   const [sets, setSets] = useState([]);
   const [creating, setCreating] = useState(false);
   const [cleaning, setCleaning] = useState(false);
@@ -59,7 +60,7 @@ const CreateFlashcard = () => {
 
       // Refresh sets list and select the new set
       await fetchSets();
-      setSetId(data.id);
+      setSelectedSetIds([...selectedSetIds, data.id]);
       setShowNewSetDialog(false);
       setNewSetName('');
       setNewSetIcon('📚');
@@ -127,17 +128,27 @@ const CreateFlashcard = () => {
     setError(null);
 
     try {
-      const { error: insertError } = await supabase
-        .from('flashcards')
-        .insert([
-          {
+      // If multiple sets selected, create multiple flashcards (one per set)
+      // If no sets selected, create one unassigned flashcard
+      const flashcardsToCreate = selectedSetIds.length > 0
+        ? selectedSetIds.map(setId => ({
             front: front.trim(),
             back: back.trim(),
-            set_id: setId || null,
+            set_id: setId,
             next_review: new Date().toISOString(),
             interval_days: 1,
-          }
-        ]);
+          }))
+        : [{
+            front: front.trim(),
+            back: back.trim(),
+            set_id: null,
+            next_review: new Date().toISOString(),
+            interval_days: 1,
+          }];
+
+      const { error: insertError } = await supabase
+        .from('flashcards')
+        .insert(flashcardsToCreate);
 
       if (insertError) throw insertError;
 
@@ -160,17 +171,27 @@ const CreateFlashcard = () => {
     setError(null);
 
     try {
-      const { error: insertError } = await supabase
-        .from('flashcards')
-        .insert([
-          {
+      // If multiple sets selected, create multiple flashcards (one per set)
+      // If no sets selected, create one unassigned flashcard
+      const flashcardsToCreate = selectedSetIds.length > 0
+        ? selectedSetIds.map(setId => ({
             front: front.trim(),
             back: back.trim(),
-            set_id: setId || null,
+            set_id: setId,
             next_review: new Date().toISOString(),
             interval_days: 1,
-          }
-        ]);
+          }))
+        : [{
+            front: front.trim(),
+            back: back.trim(),
+            set_id: null,
+            next_review: new Date().toISOString(),
+            interval_days: 1,
+          }];
+
+      const { error: insertError } = await supabase
+        .from('flashcards')
+        .insert(flashcardsToCreate);
 
       if (insertError) throw insertError;
 
@@ -193,22 +214,13 @@ const CreateFlashcard = () => {
 
       <form className="create-form">
         <div className="form-group">
-          <label htmlFor="set-select">Flashcard Set (optional)</label>
           <div className="set-selection-row">
-            <select
-              id="set-select"
-              value={setId}
-              onChange={(e) => setSetId(e.target.value)}
-              disabled={creating}
-              style={{ flex: 1 }}
-            >
-              <option value="">-- No Set (Unassigned) --</option>
-              {sets.map(set => (
-                <option key={set.id} value={set.id}>
-                  {set.icon} {set.name}
-                </option>
-              ))}
-            </select>
+            <MultiSetSelector
+              selectedSets={selectedSetIds}
+              onSelectionChange={setSelectedSetIds}
+              sets={sets}
+              label="Assign to Sets (optional - can select multiple)"
+            />
             <button
               type="button"
               className="btn-secondary btn-sm"
@@ -218,6 +230,11 @@ const CreateFlashcard = () => {
               ➕ New Set
             </button>
           </div>
+          {selectedSetIds.length > 1 && (
+            <div className="multi-set-info">
+              ℹ️ This flashcard will be added to {selectedSetIds.length} sets
+            </div>
+          )}
         </div>
 
         {showNewSetDialog && (
