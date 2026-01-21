@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { generateFlashcardsFromSlides, cleanupFlashcardGrammar } from '../services/openai';
+import MultiSetSelector from '../components/MultiSetSelector';
 
 const InteractiveFlashcardEditor = () => {
   const location = useLocation();
@@ -10,6 +11,8 @@ const InteractiveFlashcardEditor = () => {
 
   // State management
   const [slides, setSlides] = useState([]);
+  const [sets, setSets] = useState([]);
+  const [selectedSetIds, setSelectedSetIds] = useState([]);
   const [generating, setGenerating] = useState(false);
   const [generatedCards, setGeneratedCards] = useState([]);
   const [selectedCards, setSelectedCards] = useState(new Set());
@@ -21,6 +24,7 @@ const InteractiveFlashcardEditor = () => {
   useEffect(() => {
     if (slideIds.length > 0) {
       fetchSlides();
+      fetchSets();
     }
   }, [slideIds]);
 
@@ -33,6 +37,17 @@ const InteractiveFlashcardEditor = () => {
 
     if (!error && data) {
       setSlides(data);
+    }
+  };
+
+  const fetchSets = async () => {
+    const { data, error } = await supabase
+      .from('flashcard_sets')
+      .select('*')
+      .order('name');
+
+    if (!error) {
+      setSets(data || []);
     }
   };
 
@@ -161,20 +176,46 @@ const InteractiveFlashcardEditor = () => {
     setSaving(true);
 
     try {
-      const cardsToSave = generatedCards
+      const validCards = generatedCards
         .filter(card => selectedCards.has(card.tempId))
-        .filter(card => card.front.trim() && card.back.trim()) // Only save cards with content
-        .map(({ tempId, isEdited, originalFront, originalBack, aiSuggestion, showSuggestion, ...card }) => ({
-          ...card,
-          next_review: new Date().toISOString(),
-          interval_days: 1,
-          is_flagged: false
-        }));
+        .filter(card => card.front.trim() && card.back.trim()); // Only save cards with content
 
-      if (cardsToSave.length === 0) {
+      if (validCards.length === 0) {
         alert('No valid flashcards to save. Please ensure cards have both front and back content.');
         setSaving(false);
         return;
+      }
+
+      // If multiple sets selected, create copies for each set
+      // If no sets selected, create one unassigned copy
+      const cardsToSave = [];
+
+      if (selectedSetIds.length > 0) {
+        // Create a copy of each card for each selected set
+        validCards.forEach(card => {
+          selectedSetIds.forEach(setId => {
+            const { tempId, isEdited, originalFront, originalBack, aiSuggestion, showSuggestion, ...cleanCard } = card;
+            cardsToSave.push({
+              ...cleanCard,
+              set_id: setId,
+              next_review: new Date().toISOString(),
+              interval_days: 1,
+              is_flagged: false
+            });
+          });
+        });
+      } else {
+        // No sets selected, create unassigned cards
+        validCards.forEach(card => {
+          const { tempId, isEdited, originalFront, originalBack, aiSuggestion, showSuggestion, ...cleanCard } = card;
+          cardsToSave.push({
+            ...cleanCard,
+            set_id: null,
+            next_review: new Date().toISOString(),
+            interval_days: 1,
+            is_flagged: false
+          });
+        });
       }
 
       const { error } = await supabase
@@ -220,13 +261,28 @@ const InteractiveFlashcardEditor = () => {
         </div>
         <div className="header-actions">
           {generatedCards.length > 0 && (
-            <button
-              className="btn-primary"
-              onClick={handleSave}
-              disabled={selectedCards.size === 0 || saving}
-            >
-              {saving ? 'Saving...' : `💾 Save Selected (${selectedCards.size})`}
-            </button>
+            <>
+              <div style={{ minWidth: '300px' }}>
+                <MultiSetSelector
+                  selectedSets={selectedSetIds}
+                  onSelectionChange={setSelectedSetIds}
+                  sets={sets}
+                  label="Assign to Sets"
+                />
+                {selectedSetIds.length > 1 && (
+                  <div className="multi-set-info" style={{ marginTop: '0.5rem' }}>
+                    ℹ️ Cards will be added to {selectedSetIds.length} sets
+                  </div>
+                )}
+              </div>
+              <button
+                className="btn-primary"
+                onClick={handleSave}
+                disabled={selectedCards.size === 0 || saving}
+              >
+                {saving ? 'Saving...' : `💾 Save Selected (${selectedCards.size})`}
+              </button>
+            </>
           )}
         </div>
       </div>

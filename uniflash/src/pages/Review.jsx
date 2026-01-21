@@ -22,7 +22,13 @@ const Review = () => {
     fetchSets();
     fetchDueCards();
     const setParam = searchParams.get('set');
-    if (setParam) {
+    const setsParam = searchParams.get('sets');
+
+    if (setsParam) {
+      // Handle multiple sets (comma-separated)
+      setSelectedSets(setsParam.split(','));
+    } else if (setParam) {
+      // Handle single set
       setSelectedSets([setParam]);
     }
   }, []);
@@ -246,16 +252,30 @@ const Review = () => {
   const currentCard = cards[currentIndex];
   const progress = ((currentIndex + 1) / cards.length) * 100;
 
+  const getSelectedSetNames = () => {
+    return sets
+      .filter(set => selectedSets.includes(set.id))
+      .map(set => `${set.icon} ${set.name}`)
+      .join(', ');
+  };
+
   return (
     <div className="review">
       <div className="review-header">
-        <div className="review-progress">
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${progress}%` }} />
+        <div className="review-info">
+          <div className="review-progress">
+            <div className="progress-bar">
+              <div className="progress-fill" style={{ width: `${progress}%` }} />
+            </div>
+            <div className="progress-text">
+              {currentIndex + 1} / {cards.length}
+            </div>
           </div>
-          <div className="progress-text">
-            {currentIndex + 1} / {cards.length}
-          </div>
+          {selectedSets.length > 0 && (
+            <div className="studying-sets">
+              <strong>Studying:</strong> {getSelectedSetNames()}
+            </div>
+          )}
         </div>
         <button
           className="btn-secondary"

@@ -11,6 +11,10 @@ const SlideSelection = () => {
   const [selectedSlides, setSelectedSlides] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [editingSlide, setEditingSlide] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetchPresentation();
@@ -81,9 +85,81 @@ const SlideSelection = () => {
   const handleGenerateFlashcards = async () => {
     if (selectedSlides.size === 0) return;
 
-    navigate('/flashcards/editor', {
+    navigate('/flashcards/from-slides', {
       state: { slideIds: Array.from(selectedSlides) }
     });
+  };
+
+  const handleEditSlide = (slide, e) => {
+    e.stopPropagation();
+    setEditingSlide(slide.id);
+    setEditTitle(slide.title || '');
+    setEditContent(slide.content || '');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingSlide(null);
+    setEditTitle('');
+    setEditContent('');
+  };
+
+  const handleSaveEdit = async (slideId, e) => {
+    e.stopPropagation();
+    setSaving(true);
+
+    try {
+      const { error } = await supabase
+        .from('slides')
+        .update({
+          title: editTitle.trim(),
+          content: editContent.trim()
+        })
+        .eq('id', slideId);
+
+      if (error) throw error;
+
+      // Update local state
+      const updatedSlides = slides.map(s =>
+        s.id === slideId
+          ? { ...s, title: editTitle.trim(), content: editContent.trim() }
+          : s
+      );
+      setSlides(updatedSlides);
+      setEditingSlide(null);
+      setEditTitle('');
+      setEditContent('');
+    } catch (error) {
+      alert(`Failed to save slide: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteSlide = async (slideId, e) => {
+    e.stopPropagation();
+
+    if (!window.confirm('Are you sure you want to delete this slide?')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('slides')
+        .delete()
+        .eq('id', slideId);
+
+      if (error) throw error;
+
+      // Update local state
+      setSlides(slides.filter(s => s.id !== slideId));
+
+      // Remove from selected if it was selected
+      const newSelected = new Set(selectedSlides);
+      newSelected.delete(slideId);
+      setSelectedSlides(newSelected);
+    } catch (error) {
+      alert(`Failed to delete slide: ${error.message}`);
+    }
   };
 
   if (loading) {
@@ -126,17 +202,77 @@ const SlideSelection = () => {
         {filteredSlides.map((slide) => (
           <div
             key={slide.id}
-            className={`slide-card ${selectedSlides.has(slide.id) ? 'selected' : ''}`}
-            onClick={() => toggleSlide(slide.id)}
+            className={`slide-card ${selectedSlides.has(slide.id) ? 'selected' : ''} ${editingSlide === slide.id ? 'editing' : ''}`}
+            onClick={() => editingSlide !== slide.id && toggleSlide(slide.id)}
           >
             <div className="slide-number">Slide {slide.slide_number}</div>
-            <div className="slide-title">{slide.title || 'Untitled'}</div>
-            <div className="slide-content">
-              {slide.content.substring(0, 150)}
-              {slide.content.length > 150 ? '...' : ''}
-            </div>
-            {selectedSlides.has(slide.id) && (
-              <div className="selected-indicator">✓</div>
+
+            {editingSlide === slide.id ? (
+              <div className="slide-edit-mode" onClick={(e) => e.stopPropagation()}>
+                <div className="edit-field">
+                  <label>Title:</label>
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    placeholder="Enter slide title..."
+                    className="edit-input"
+                  />
+                </div>
+                <div className="edit-field">
+                  <label>Content:</label>
+                  <textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    placeholder="Enter slide content..."
+                    className="edit-textarea"
+                    rows={8}
+                  />
+                </div>
+                <div className="edit-actions">
+                  <button
+                    className="btn-secondary btn-sm"
+                    onClick={handleCancelEdit}
+                    disabled={saving}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn-primary btn-sm"
+                    onClick={(e) => handleSaveEdit(slide.id, e)}
+                    disabled={saving}
+                  >
+                    {saving ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="slide-title">{slide.title || 'Untitled'}</div>
+                <div className="slide-content">
+                  {slide.content.substring(0, 150)}
+                  {slide.content.length > 150 ? '...' : ''}
+                </div>
+                <div className="slide-actions">
+                  <button
+                    className="btn-icon btn-edit"
+                    onClick={(e) => handleEditSlide(slide, e)}
+                    title="Edit slide"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    className="btn-icon btn-delete"
+                    onClick={(e) => handleDeleteSlide(slide.id, e)}
+                    title="Delete slide"
+                  >
+                    🗑️
+                  </button>
+                </div>
+                {selectedSlides.has(slide.id) && (
+                  <div className="selected-indicator">✓</div>
+                )}
+              </>
             )}
           </div>
         ))}
