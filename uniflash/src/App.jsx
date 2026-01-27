@@ -19,6 +19,7 @@ import TakeQuiz from './pages/TakeQuiz';
 import QuizResults from './pages/QuizResults';
 import QuizHistory from './pages/QuizHistory';
 import Help from './pages/Help';
+import Settings from './pages/Settings';
 import './styles/App.css';
 import './styles/InteractiveEditor.css';
 
@@ -80,6 +81,9 @@ function App() {
 
             {/* Help Route */}
             <Route path="/help" element={<Help />} />
+
+            {/* Settings Route */}
+            <Route path="/settings" element={<Settings />} />
           </Routes>
         </div>
       </div>

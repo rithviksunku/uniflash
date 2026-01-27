@@ -648,55 +648,81 @@ input[type="checkbox"] {
 .practice-card-large {
   background: white;
   border-radius: var(--radius-xl);
-  padding: 3rem;
+  padding: 2.5rem;
   box-shadow: var(--shadow-lg);
-  min-height: 400px;
+  min-height: 500px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
+  text-align: left;
   cursor: pointer;
-  transition: var(--transition);
-  margin: 2rem 0;
-}
-
-.practice-card-large:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-xl);
-}
-
-.card-front-practice,
-.card-back-practice {
+  transition: box-shadow 0.2s ease;
+  margin: 1.5rem 0;
+  max-width: 800px;
   width: 100%;
 }
 
+.practice-card-large:hover {
+  box-shadow: var(--shadow-xl);
+}
+
+.card-front-practice {
+  width: 100%;
+  padding-bottom: 1.5rem;
+  border-bottom: 2px solid #e5e7eb;
+  min-height: 180px;
+}
+
+.card-back-practice {
+  width: 100%;
+  padding-top: 1.5rem;
+  animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .card-label-practice {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 1.5px;
   color: var(--text-secondary);
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   font-weight: 600;
 }
 
+.card-front-practice .card-label-practice {
+  color: var(--primary);
+}
+
+.card-back-practice .card-label-practice {
+  color: #22c55e;
+}
+
 .card-text-practice {
-  font-size: 1.5rem;
-  line-height: 1.6;
+  font-size: 1.25rem;
+  line-height: 1.7;
   color: var(--text-primary);
-  font-weight: 500;
+  white-space: pre-wrap;
 }
 
 .divider-practice {
-  font-size: 2rem;
-  color: var(--primary);
-  margin: 2rem 0;
+  display: none;
 }
 
 .tap-hint {
-  margin-top: 2rem;
-  font-size: 1rem;
+  margin-top: auto;
+  padding-top: 2rem;
+  font-size: 0.9rem;
   color: var(--text-light);
+  text-align: center;
   animation: pulse 2s infinite;
 }
 

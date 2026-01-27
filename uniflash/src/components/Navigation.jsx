@@ -77,6 +77,13 @@ const Navigation = ({ onLogout }) => {
 
       <div className="nav-footer">
         <button
+          className={`nav-item ${isActive('/settings') ? 'active' : ''}`}
+          onClick={() => navigate('/settings')}
+        >
+          <span className="nav-icon">⚙️</span>
+          <span className="nav-label">Settings</span>
+        </button>
+        <button
           className={`nav-item nav-help-btn ${isActive('/help') ? 'active' : ''}`}
           onClick={() => navigate('/help')}
         >

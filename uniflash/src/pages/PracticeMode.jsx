@@ -11,6 +11,11 @@ const PracticeMode = () => {
   const [showAnswer, setShowAnswer] = useState(false);
   const [isPracticing, setIsPracticing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [reverseMode, setReverseMode] = useState(false); // Review back-to-front
+  const [shuffleEnabled, setShuffleEnabled] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(() => {
+    return localStorage.getItem('showKeyboardHints') !== 'false';
+  });
 
   useEffect(() => {
     fetchFlashcardSets();
@@ -78,12 +83,32 @@ const PracticeMode = () => {
     setSelectedSets([]);
   };
 
+  // Fisher-Yates shuffle algorithm
+  const shuffleCards = (cardsToShuffle) => {
+    const shuffledCards = [...cardsToShuffle];
+    for (let i = shuffledCards.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledCards[i], shuffledCards[j]] = [shuffledCards[j], shuffledCards[i]];
+    }
+    return shuffledCards;
+  };
+
   const handleStartPractice = () => {
     if (cards.length > 0) {
+      // Shuffle cards if enabled
+      if (shuffleEnabled) {
+        setCards(shuffleCards(cards));
+      }
       setIsPracticing(true);
       setCurrentIndex(0);
       setShowAnswer(false);
     }
+  };
+
+  const handleShuffleNow = () => {
+    setCards(shuffleCards(cards));
+    setCurrentIndex(0);
+    setShowAnswer(false);
   };
 
   const handleNext = () => {
@@ -142,11 +167,17 @@ const PracticeMode = () => {
         e.preventDefault();
         handlePrevious();
       }
+
+      // F key to flag card
+      if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        toggleFlag(currentCard.id, currentCard.is_flagged);
+      }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [isPracticing, showAnswer, currentIndex, cards.length]);
+  }, [isPracticing, showAnswer, currentIndex, cards]);
 
   if (loading) {
     return <div className="loading">Loading flashcards...</div>;
@@ -216,6 +247,25 @@ const PracticeMode = () => {
           </div>
         </div>
 
+        <div className="practice-options">
+          <label className="toggle-option">
+            <input
+              type="checkbox"
+              checked={reverseMode}
+              onChange={(e) => setReverseMode(e.target.checked)}
+            />
+            <span className="toggle-label">🔄 Reverse Mode (Answer → Question)</span>
+          </label>
+          <label className="toggle-option">
+            <input
+              type="checkbox"
+              checked={shuffleEnabled}
+              onChange={(e) => setShuffleEnabled(e.target.checked)}
+            />
+            <span className="toggle-label">🔀 Shuffle Cards</span>
+          </label>
+        </div>
+
         {cards.length === 0 ? (
           <div className="empty-state">
             <p>No flashcards in this set yet.</p>
@@ -250,6 +300,40 @@ const PracticeMode = () => {
 
   return (
     <div className="practice-session">
+      {/* Floating Keyboard Shortcuts Legend */}
+      {showShortcuts && (
+        <div className="shortcuts-legend-float">
+          <div className="shortcuts-legend-header">
+            <span>⌨️ Shortcuts</span>
+            <button className="btn-close-legend" onClick={() => setShowShortcuts(false)}>×</button>
+          </div>
+          <div className="shortcuts-legend-items">
+            <div className="shortcut-legend-item">
+              <kbd>Space</kbd>
+              <span>Show answer</span>
+            </div>
+            <div className="shortcut-legend-item">
+              <kbd>←</kbd>
+              <span>Previous</span>
+            </div>
+            <div className="shortcut-legend-item">
+              <kbd>→</kbd>
+              <span>Next</span>
+            </div>
+            <div className="shortcut-legend-item">
+              <kbd>F</kbd>
+              <span>Flag card</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!showShortcuts && (
+        <button className="btn-show-shortcuts" onClick={() => setShowShortcuts(true)} title="Show keyboard shortcuts">
+          ⌨️
+        </button>
+      )}
+
       <div className="practice-progress">
         <div className="progress-bar">
           <div className="progress-fill" style={{ width: `${progress}%` }} />
@@ -262,21 +346,21 @@ const PracticeMode = () => {
       <div className="practice-card-container">
         <div className="practice-card-large" onClick={() => !showAnswer && setShowAnswer(true)}>
           <div className="card-front-practice">
-            <div className="card-label-practice">Question</div>
-            <div className="card-text-practice">{currentCard.front}</div>
+            <div className="card-label-practice">{reverseMode ? 'Answer' : 'Question'}</div>
+            <div className="card-text-practice">{reverseMode ? currentCard.back : currentCard.front}</div>
           </div>
 
           {showAnswer && (
             <div className="card-back-practice">
               <div className="divider-practice">•••</div>
-              <div className="card-label-practice">Answer</div>
-              <div className="card-text-practice">{currentCard.back}</div>
+              <div className="card-label-practice">{reverseMode ? 'Question' : 'Answer'}</div>
+              <div className="card-text-practice">{reverseMode ? currentCard.front : currentCard.back}</div>
             </div>
           )}
 
           {!showAnswer && (
             <div className="tap-hint">
-              👆 Tap anywhere or press <kbd>Space</kbd> to reveal answer
+              👆 Tap anywhere or press <kbd>Space</kbd> to reveal {reverseMode ? 'question' : 'answer'}
             </div>
           )}
         </div>
@@ -318,12 +402,21 @@ const PracticeMode = () => {
           </>
         )}
 
-        <button
-          className="btn-text"
-          onClick={() => setIsPracticing(false)}
-        >
-          Exit Practice
-        </button>
+        <div className="practice-extra-controls">
+          <button
+            className="btn-secondary btn-sm"
+            onClick={handleShuffleNow}
+            title="Shuffle remaining cards"
+          >
+            🔀 Shuffle
+          </button>
+          <button
+            className="btn-text"
+            onClick={() => setIsPracticing(false)}
+          >
+            Exit Practice
+          </button>
+        </div>
       </div>
     </div>
   );

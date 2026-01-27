@@ -9,10 +9,15 @@ const Dashboard = () => {
     cardsReviewed: 0,
     timeSpent: 0,
   });
+  const [streakData, setStreakData] = useState({
+    currentStreak: 0,
+    longestStreak: 0,
+  });
 
   useEffect(() => {
     fetchDueCards();
     fetchReviewStats();
+    fetchStreakData();
   }, []);
 
   const fetchDueCards = async () => {
@@ -43,6 +48,37 @@ const Dashboard = () => {
     }
   };
 
+  const fetchStreakData = async () => {
+    const { data, error } = await supabase
+      .from('study_streaks')
+      .select('current_streak, longest_streak')
+      .single();
+
+    if (!error && data) {
+      setStreakData({
+        currentStreak: data.current_streak || 0,
+        longestStreak: data.longest_streak || 0,
+      });
+    }
+  };
+
+  const getStreakEmoji = (streak) => {
+    if (streak >= 30) return '👑';
+    if (streak >= 14) return '🔥';
+    if (streak >= 7) return '⭐';
+    if (streak >= 3) return '✨';
+    return '🌱';
+  };
+
+  const getStreakMessage = (streak) => {
+    if (streak >= 30) return 'Legendary!';
+    if (streak >= 14) return 'On Fire!';
+    if (streak >= 7) return 'Great Week!';
+    if (streak >= 3) return 'Building Momentum!';
+    if (streak >= 1) return 'Keep Going!';
+    return 'Start Today!';
+  };
+
   return (
     <div className="dashboard">
       <div className="dashboard-header">
@@ -51,6 +87,16 @@ const Dashboard = () => {
       </div>
 
       <div className="stats-container">
+        <div className={`stat-card streak-card ${streakData.currentStreak >= 7 ? 'streak-fire' : ''}`}>
+          <div className="stat-icon streak-icon">{getStreakEmoji(streakData.currentStreak)}</div>
+          <div className="stat-value streak-value">{streakData.currentStreak}</div>
+          <div className="stat-label">Day Streak</div>
+          <div className="streak-message">{getStreakMessage(streakData.currentStreak)}</div>
+          {streakData.longestStreak > 0 && (
+            <div className="streak-best">Best: {streakData.longestStreak} days</div>
+          )}
+        </div>
+
         <div className="stat-card">
           <div className="stat-icon">🎴</div>
           <div className="stat-value">{dueCount}</div>

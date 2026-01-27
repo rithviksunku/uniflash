@@ -2,6 +2,56 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 
+// Fuzzy search function - matches characters in order but not necessarily consecutive
+const fuzzyMatch = (text, pattern) => {
+  if (!pattern) return { matches: true, score: 0 };
+
+  const textLower = text.toLowerCase();
+  const patternLower = pattern.toLowerCase();
+
+  let patternIdx = 0;
+  let score = 0;
+  let lastMatchIdx = -1;
+  let consecutiveMatches = 0;
+
+  for (let i = 0; i < textLower.length && patternIdx < patternLower.length; i++) {
+    if (textLower[i] === patternLower[patternIdx]) {
+      // Bonus for consecutive matches
+      if (lastMatchIdx === i - 1) {
+        consecutiveMatches++;
+        score += consecutiveMatches * 2;
+      } else {
+        consecutiveMatches = 1;
+      }
+      // Bonus for matching at word boundaries
+      if (i === 0 || textLower[i - 1] === ' ' || textLower[i - 1] === '-') {
+        score += 5;
+      }
+      lastMatchIdx = i;
+      patternIdx++;
+      score += 1;
+    }
+  }
+
+  // All pattern characters must be found
+  const matches = patternIdx === patternLower.length;
+
+  // Bonus for exact match
+  if (matches && textLower === patternLower) {
+    score += 50;
+  }
+  // Bonus for starting with pattern
+  if (matches && textLower.startsWith(patternLower)) {
+    score += 20;
+  }
+  // Bonus for containing the full pattern as a substring
+  if (matches && textLower.includes(patternLower)) {
+    score += 15;
+  }
+
+  return { matches, score };
+};
+
 const FlashcardList = () => {
   const navigate = useNavigate();
   const [flashcards, setFlashcards] = useState([]);
@@ -13,6 +63,8 @@ const FlashcardList = () => {
   const [selectedSet, setSelectedSet] = useState('all');
   const [showCreateSetModal, setShowCreateSetModal] = useState(false);
   const [newSetName, setNewSetName] = useState('');
+  const [sortBy, setSortBy] = useState('newest'); // newest, oldest, front-az, front-za
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     fetchFlashcards();
@@ -21,7 +73,7 @@ const FlashcardList = () => {
 
   useEffect(() => {
     filterFlashcards();
-  }, [flashcards, searchTerm, selectedSet]);
+  }, [flashcards, searchTerm, selectedSet, sortBy]);
 
   const fetchSets = async () => {
     const { data, error } = await supabase
@@ -71,13 +123,56 @@ const FlashcardList = () => {
       }
     }
 
-    // Filter by search term
+    // Fuzzy search filter
     if (searchTerm.trim()) {
-      const search = searchTerm.toLowerCase();
-      filtered = filtered.filter(card =>
-        card.front.toLowerCase().includes(search) ||
-        card.back.toLowerCase().includes(search)
-      );
+      filtered = filtered
+        .map(card => {
+          const frontMatch = fuzzyMatch(card.front, searchTerm);
+          const backMatch = fuzzyMatch(card.back, searchTerm);
+          const setMatch = card.flashcard_sets?.name
+            ? fuzzyMatch(card.flashcard_sets.name, searchTerm)
+            : { matches: false, score: 0 };
+
+          const matches = frontMatch.matches || backMatch.matches || setMatch.matches;
+          const score = Math.max(frontMatch.score, backMatch.score, setMatch.score);
+
+          return { ...card, _matches: matches, _score: score };
+        })
+        .filter(card => card._matches)
+        .sort((a, b) => b._score - a._score); // Sort by relevance when searching
+    }
+
+    // Apply sorting (only if not searching, since search has its own relevance sort)
+    if (!searchTerm.trim()) {
+      switch (sortBy) {
+        case 'oldest':
+          filtered = [...filtered].sort((a, b) =>
+            new Date(a.created_at) - new Date(b.created_at)
+          );
+          break;
+        case 'newest':
+          filtered = [...filtered].sort((a, b) =>
+            new Date(b.created_at) - new Date(a.created_at)
+          );
+          break;
+        case 'front-az':
+          filtered = [...filtered].sort((a, b) =>
+            a.front.localeCompare(b.front)
+          );
+          break;
+        case 'front-za':
+          filtered = [...filtered].sort((a, b) =>
+            b.front.localeCompare(a.front)
+          );
+          break;
+        case 'due-soon':
+          filtered = [...filtered].sort((a, b) =>
+            new Date(a.next_review) - new Date(b.next_review)
+          );
+          break;
+        default:
+          break;
+      }
     }
 
     setFilteredCards(filtered);
@@ -258,14 +353,27 @@ const FlashcardList = () => {
       .update({
         front: editingCard.front,
         back: editingCard.back,
+        set_id: editingCard.set_id,
       })
       .eq('id', editingCard.id);
 
     if (!error) {
-      setFlashcards(flashcards.map(card =>
-        card.id === editingCard.id ? editingCard : card
-      ));
+      // Refetch to get updated set info
+      await fetchFlashcards();
       setEditingCard(null);
+    }
+  };
+
+  const handleChangeSet = async (cardId, newSetId) => {
+    const { error } = await supabase
+      .from('flashcards')
+      .update({ set_id: newSetId || null })
+      .eq('id', cardId);
+
+    if (!error) {
+      await fetchFlashcards();
+    } else {
+      alert('Error changing set: ' + error.message);
     }
   };
 
@@ -413,31 +521,101 @@ const FlashcardList = () => {
         <div className="search-box">
           <input
             type="text"
-            placeholder="🔍 Search flashcards..."
+            placeholder="🔍 Search flashcards (fuzzy match)..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="search-input"
           />
+          {searchTerm && (
+            <button
+              className="search-clear"
+              onClick={() => setSearchTerm('')}
+              title="Clear search"
+            >
+              ✕
+            </button>
+          )}
         </div>
 
-        <div className="set-filter">
-          <label htmlFor="set-filter">Filter by Set:</label>
-          <select
-            id="set-filter"
-            value={selectedSet}
-            onChange={(e) => setSelectedSet(e.target.value)}
+        <div className="filter-controls">
+          <div className="set-filter">
+            <select
+              id="set-filter"
+              value={selectedSet}
+              onChange={(e) => setSelectedSet(e.target.value)}
+              title="Filter by set"
+            >
+              <option value="all">📁 All Sets</option>
+              <option value="flagged">🚩 Flagged</option>
+              <option value="unassigned">📭 Unassigned</option>
+              {sets.map(set => (
+                <option key={set.id} value={set.id}>
+                  {set.icon} {set.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="sort-filter">
+            <select
+              id="sort-filter"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              title="Sort cards"
+            >
+              <option value="newest">📅 Newest First</option>
+              <option value="oldest">📅 Oldest First</option>
+              <option value="front-az">🔤 A → Z</option>
+              <option value="front-za">🔤 Z → A</option>
+              <option value="due-soon">⏰ Due Soon</option>
+            </select>
+          </div>
+
+          <button
+            className={`btn-filter-toggle ${showFilters ? 'active' : ''}`}
+            onClick={() => setShowFilters(!showFilters)}
+            title="More filters"
           >
-            <option value="all">All Flashcards</option>
-            <option value="flagged">🚩 Flagged Cards</option>
-            <option value="unassigned">Unassigned</option>
-            {sets.map(set => (
-              <option key={set.id} value={set.id}>
-                {set.icon} {set.name}
-              </option>
-            ))}
-          </select>
+            🎛️ Filters
+          </button>
         </div>
       </div>
+
+      {showFilters && (
+        <div className="advanced-filters">
+          <div className="filter-chips">
+            <span className="filter-label">Quick filters:</span>
+            <button
+              className={`filter-chip ${selectedSet === 'all' ? 'active' : ''}`}
+              onClick={() => setSelectedSet('all')}
+            >
+              All ({flashcards.length})
+            </button>
+            <button
+              className={`filter-chip ${selectedSet === 'flagged' ? 'active' : ''}`}
+              onClick={() => setSelectedSet('flagged')}
+            >
+              🚩 Flagged ({flashcards.filter(c => c.is_flagged).length})
+            </button>
+            <button
+              className={`filter-chip ${selectedSet === 'unassigned' ? 'active' : ''}`}
+              onClick={() => setSelectedSet('unassigned')}
+            >
+              Unassigned ({flashcards.filter(c => !c.set_id).length})
+            </button>
+            {sets.map(set => (
+              <button
+                key={set.id}
+                className={`filter-chip ${selectedSet === set.id ? 'active' : ''}`}
+                onClick={() => setSelectedSet(set.id)}
+                style={{ borderLeftColor: set.color }}
+              >
+                {set.icon} {set.name} ({flashcards.filter(c => c.set_id === set.id).length})
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {flashcards.filter(card => card.is_flagged).length > 0 && (
         <div className="flagged-section">
@@ -525,96 +703,146 @@ const FlashcardList = () => {
           </button>
         </div>
       ) : (
-        <div className="flashcard-grid">
-          {filteredCards.map((card) => (
-            <div key={card.id} className="flashcard-item">
-              {editingCard && editingCard.id === card.id ? (
-                <div className="edit-mode">
-                  <div className="edit-field">
-                    <label>Front:</label>
-                    <textarea
-                      value={editingCard.front}
-                      onChange={(e) => setEditingCard({
-                        ...editingCard,
-                        front: e.target.value
-                      })}
-                      rows={3}
-                    />
-                  </div>
-                  <div className="edit-field">
-                    <label>Back:</label>
-                    <textarea
-                      value={editingCard.back}
-                      onChange={(e) => setEditingCard({
-                        ...editingCard,
-                        back: e.target.value
-                      })}
-                      rows={3}
-                    />
-                  </div>
-                  <div className="edit-actions">
-                    <button onClick={handleCancel} className="btn-secondary">
-                      Cancel
-                    </button>
-                    <button onClick={handleSave} className="btn-primary">
-                      Save
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="card-header-badges">
-                    {card.flashcard_sets && (
-                      <div className="card-set-badge" style={{ borderLeft: `4px solid ${card.flashcard_sets.color}` }}>
-                        {card.flashcard_sets.icon} {card.flashcard_sets.name}
-                      </div>
-                    )}
-                    {card.is_flagged && (
-                      <div className="card-flag-badge">
-                        🚩 Flagged
-                      </div>
-                    )}
-                  </div>
-                  <div className="card-content">
-                    <div className="card-side">
-                      <div className="card-label">Front:</div>
-                      <div className="card-text">{card.front}</div>
-                    </div>
-                    <div className="card-side">
-                      <div className="card-label">Back:</div>
-                      <div className="card-text">{card.back}</div>
-                    </div>
-                  </div>
-                  {card.slides && (
-                    <div className="card-source">
-                      📄 Slide {card.slides.slide_number}: {card.slides.title}
-                    </div>
+        <div className="flashcard-table-container">
+          <table className="flashcard-table">
+            <thead>
+              <tr>
+                <th className="col-flag"></th>
+                <th className="col-front">Front</th>
+                <th className="col-back">Back</th>
+                <th className="col-set">Set</th>
+                <th className="col-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredCards.map((card) => (
+                <tr key={card.id} className={`flashcard-row ${card.is_flagged ? 'flagged' : ''}`}>
+                  {editingCard && editingCard.id === card.id ? (
+                    <>
+                      <td className="col-flag">
+                        <button
+                          onClick={() => setEditingCard({
+                            ...editingCard,
+                            is_flagged: !editingCard.is_flagged
+                          })}
+                          className="btn-icon-table"
+                          title={editingCard.is_flagged ? 'Unflag' : 'Flag'}
+                        >
+                          {editingCard.is_flagged ? '🚩' : '🏳️'}
+                        </button>
+                      </td>
+                      <td className="col-front">
+                        <textarea
+                          value={editingCard.front}
+                          onChange={(e) => setEditingCard({
+                            ...editingCard,
+                            front: e.target.value
+                          })}
+                          className="table-textarea"
+                          rows={2}
+                        />
+                      </td>
+                      <td className="col-back">
+                        <textarea
+                          value={editingCard.back}
+                          onChange={(e) => setEditingCard({
+                            ...editingCard,
+                            back: e.target.value
+                          })}
+                          className="table-textarea"
+                          rows={2}
+                        />
+                      </td>
+                      <td className="col-set">
+                        <select
+                          value={editingCard.set_id || ''}
+                          onChange={(e) => setEditingCard({
+                            ...editingCard,
+                            set_id: e.target.value || null
+                          })}
+                          className="table-select"
+                        >
+                          <option value="">Unassigned</option>
+                          {sets.map(set => (
+                            <option key={set.id} value={set.id}>
+                              {set.icon} {set.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="col-actions">
+                        <div className="table-actions">
+                          <button onClick={handleSave} className="btn-icon-table btn-save-table" title="Save">
+                            ✓
+                          </button>
+                          <button onClick={handleCancel} className="btn-icon-table btn-cancel-table" title="Cancel">
+                            ✕
+                          </button>
+                        </div>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="col-flag">
+                        <button
+                          onClick={() => toggleFlag(card.id, card.is_flagged)}
+                          className="btn-icon-table"
+                          title={card.is_flagged ? 'Unflag' : 'Flag as difficult'}
+                        >
+                          {card.is_flagged ? '🚩' : '🏳️'}
+                        </button>
+                      </td>
+                      <td className="col-front">
+                        <div className="cell-text">{card.front}</div>
+                        {card.slides && (
+                          <div className="cell-source">
+                            📄 Slide {card.slides.slide_number}
+                          </div>
+                        )}
+                      </td>
+                      <td className="col-back">
+                        <div className="cell-text">{card.back}</div>
+                      </td>
+                      <td className="col-set">
+                        <select
+                          className="table-select-compact"
+                          value={card.set_id || ''}
+                          onChange={(e) => handleChangeSet(card.id, e.target.value)}
+                          title="Change set"
+                          style={{ borderLeftColor: card.flashcard_sets?.color || '#9ca3af' }}
+                        >
+                          <option value="">Unassigned</option>
+                          {sets.map(set => (
+                            <option key={set.id} value={set.id}>
+                              {set.icon} {set.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="col-actions">
+                        <div className="table-actions">
+                          <button
+                            onClick={() => handleEdit(card)}
+                            className="btn-icon-table"
+                            title="Edit"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => handleDelete(card.id)}
+                            className="btn-icon-table btn-danger-table"
+                            title="Delete"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </td>
+                    </>
                   )}
-                  <div className="card-actions">
-                    <button
-                      onClick={() => toggleFlag(card.id, card.is_flagged)}
-                      className={card.is_flagged ? "btn-warning" : "btn-secondary"}
-                      title={card.is_flagged ? "Unflag this card" : "Flag as difficult"}
-                    >
-                      {card.is_flagged ? '🚩 Unflag' : '🏳️ Flag'}
-                    </button>
-                    <button
-                      onClick={() => handleEdit(card)}
-                      className="btn-secondary"
-                    >
-                      ✏️ Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(card.id)}
-                      className="btn-danger"
-                    >
-                      🗑️ Delete
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
