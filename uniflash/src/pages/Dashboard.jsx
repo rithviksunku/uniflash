@@ -13,11 +13,13 @@ const Dashboard = () => {
     currentStreak: 0,
     longestStreak: 0,
   });
+  const [weeklyData, setWeeklyData] = useState([]);
 
   useEffect(() => {
     fetchDueCards();
     fetchReviewStats();
     fetchStreakData();
+    fetchWeeklyData();
   }, []);
 
   const fetchDueCards = async () => {
@@ -60,6 +62,58 @@ const Dashboard = () => {
         longestStreak: data.longest_streak || 0,
       });
     }
+  };
+
+  const fetchWeeklyData = async () => {
+    const days = [];
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+
+      days.push({
+        date: dateStr,
+        dayName: dayNames[date.getDay()],
+        isToday: i === 0,
+      });
+    }
+
+    const startDate = days[0].date;
+    const { data, error } = await supabase
+      .from('review_sessions')
+      .select('created_at, cards_reviewed')
+      .gte('created_at', startDate);
+
+    if (!error) {
+      const cardsByDay = {};
+      (data || []).forEach(session => {
+        const day = session.created_at.split('T')[0];
+        cardsByDay[day] = (cardsByDay[day] || 0) + session.cards_reviewed;
+      });
+
+      const weekData = days.map(day => ({
+        ...day,
+        cards: cardsByDay[day.date] || 0,
+      }));
+
+      setWeeklyData(weekData);
+    }
+  };
+
+  const getMaxCards = () => Math.max(...weeklyData.map(d => d.cards), 1);
+
+  const getMotivationalMessage = () => {
+    const totalWeek = weeklyData.reduce((sum, d) => sum + d.cards, 0);
+    const todayCards = weeklyData.find(d => d.isToday)?.cards || 0;
+
+    if (todayCards > 50) return { emoji: '🚀', message: "You're on fire today!" };
+    if (todayCards > 20) return { emoji: '⭐', message: 'Great progress today!' };
+    if (totalWeek > 100) return { emoji: '🏆', message: 'Amazing week so far!' };
+    if (streakData.currentStreak >= 7) return { emoji: '🔥', message: 'Keep that streak alive!' };
+    if (dueCount > 0) return { emoji: '📚', message: `${dueCount} cards waiting for you!` };
+    return { emoji: '🌟', message: 'Ready to learn something new?' };
   };
 
   const getStreakEmoji = (streak) => {
@@ -116,80 +170,89 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="action-cards">
+      {/* Primary Actions - Start Review & Practice Mode */}
+      <div className="primary-actions">
         <button
-          className="action-card primary"
+          className="action-card-large primary"
           onClick={() => navigate('/review')}
           disabled={dueCount === 0}
         >
-          <span className="action-icon">🔥</span>
-          <h3>Start Review</h3>
-          <p>{dueCount > 0 ? `${dueCount} cards waiting` : 'No cards due'}</p>
+          <span className="action-icon-large">🔥</span>
+          <div className="action-content">
+            <h3>Start Review</h3>
+            <p>{dueCount > 0 ? `${dueCount} cards waiting` : 'No cards due'}</p>
+          </div>
         </button>
 
         <button
-          className="action-card"
+          className="action-card-large"
           onClick={() => navigate('/flashcards/practice')}
         >
-          <span className="action-icon">📖</span>
-          <h3>Practice Mode</h3>
-          <p>Review all flashcards</p>
-        </button>
-
-        <button
-          className="action-card"
-          onClick={() => navigate('/upload')}
-        >
-          <span className="action-icon">📤</span>
-          <h3>Upload Slides</h3>
-          <p>Import PowerPoint or PDF</p>
-        </button>
-
-        <button
-          className="action-card"
-          onClick={() => navigate('/presentations')}
-        >
-          <span className="action-icon">📚</span>
-          <h3>My Presentations</h3>
-          <p>View and manage files</p>
-        </button>
-
-        <button
-          className="action-card"
-          onClick={() => navigate('/flashcards/create')}
-        >
-          <span className="action-icon">➕</span>
-          <h3>Create Flashcards</h3>
-          <p>Manual entry</p>
-        </button>
-
-        <button
-          className="action-card"
-          onClick={() => navigate('/quiz/generate')}
-        >
-          <span className="action-icon">🎯</span>
-          <h3>Generate Quiz</h3>
-          <p>Test your knowledge</p>
-        </button>
-
-        <button
-          className="action-card"
-          onClick={() => navigate('/quiz/history')}
-        >
-          <span className="action-icon">📊</span>
-          <h3>Quiz History</h3>
-          <p>View and retake quizzes</p>
-        </button>
-
-        <button
-          className="action-card"
-          onClick={() => navigate('/flashcards')}
-        >
-          <span className="action-icon">📋</span>
-          <h3>Manage Flashcards</h3>
-          <p>View and edit</p>
+          <span className="action-icon-large">📖</span>
+          <div className="action-content">
+            <h3>Practice Mode</h3>
+            <p>Study without spaced repetition</p>
+          </div>
         </button>
       </div>
+
+      {/* Quick Links */}
+      <div className="quick-links">
+        <button className="quick-link" onClick={() => navigate('/flashcards/create')}>
+          ➕ Create Cards
+        </button>
+        <button className="quick-link" onClick={() => navigate('/upload')}>
+          📤 Upload Slides
+        </button>
+        <button className="quick-link" onClick={() => navigate('/quiz/generate')}>
+          🎯 Take Quiz
+        </button>
+        <button className="quick-link" onClick={() => navigate('/flashcards')}>
+          📋 My Cards
+        </button>
+        <button className="quick-link" onClick={() => navigate('/sets')}>
+          📚 Flashcard Sets
+        </button>
+        <button className="quick-link" onClick={() => navigate('/presentations')}>
+          🗂️ Presentations
+        </button>
+        <button className="quick-link" onClick={() => navigate('/quiz/history')}>
+          📊 Quiz History
+        </button>
+      </div>
+
+      {/* Weekly Study Chart */}
+      {weeklyData.length > 0 && (
+        <div className="weekly-chart-card">
+          <div className="chart-header">
+            <h3>📈 Your Week</h3>
+            <div className="chart-motivation">
+              <span className="motivation-emoji">{getMotivationalMessage().emoji}</span>
+              <span className="motivation-text">{getMotivationalMessage().message}</span>
+            </div>
+          </div>
+          <div className="weekly-chart">
+            {weeklyData.map((day, index) => (
+              <div key={index} className={`chart-bar-container ${day.isToday ? 'today' : ''}`}>
+                <div className="chart-bar-wrapper">
+                  <div
+                    className="chart-bar"
+                    style={{ height: `${(day.cards / getMaxCards()) * 100}%` }}
+                  >
+                    {day.cards > 0 && <span className="bar-value">{day.cards}</span>}
+                  </div>
+                </div>
+                <span className="chart-day">{day.dayName}</span>
+              </div>
+            ))}
+          </div>
+          <div className="chart-footer">
+            <span className="chart-total">
+              🎯 {weeklyData.reduce((sum, d) => sum + d.cards, 0)} cards this week
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

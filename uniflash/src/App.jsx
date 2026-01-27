@@ -25,6 +25,9 @@ import './styles/InteractiveEditor.css';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(() => {
+    return localStorage.getItem('navCollapsed') === 'true';
+  });
 
   useEffect(() => {
     // Check if user is already authenticated
@@ -32,6 +35,13 @@ function App() {
     if (authStatus === 'true') {
       setIsAuthenticated(true);
     }
+
+    // Listen for nav toggle events
+    const handleNavToggle = (e) => {
+      setNavCollapsed(e.detail.collapsed);
+    };
+    window.addEventListener('navToggle', handleNavToggle);
+    return () => window.removeEventListener('navToggle', handleNavToggle);
   }, []);
 
   const handleLogin = (status) => {
@@ -49,7 +59,7 @@ function App() {
 
   return (
     <Router>
-      <div className="App">
+      <div className={`App ${navCollapsed ? 'nav-collapsed' : ''}`}>
         <Navigation onLogout={handleLogout} />
         <div className="main-content">
           <Routes>

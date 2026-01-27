@@ -1,21 +1,38 @@
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import '../styles/Navigation.css';
 
 const Navigation = ({ onLogout }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    return localStorage.getItem('navCollapsed') === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('navCollapsed', isCollapsed.toString());
+    // Dispatch custom event for App to listen to
+    window.dispatchEvent(new CustomEvent('navToggle', { detail: { collapsed: isCollapsed } }));
+  }, [isCollapsed]);
 
   const isActive = (path) => {
     return location.pathname === path;
   };
 
+  const toggleNav = () => {
+    setIsCollapsed(!isCollapsed);
+  };
+
   return (
-    <nav className="navigation">
+    <nav className={`navigation ${isCollapsed ? 'collapsed' : ''}`}>
+      <button className="nav-toggle" onClick={toggleNav} title={isCollapsed ? 'Expand menu' : 'Collapse menu'}>
+        {isCollapsed ? '→' : '←'}
+      </button>
       <div className="nav-header">
         <h2 className="nav-logo" onClick={() => navigate('/dashboard')}>
-          ✨ Uniflash
+          {isCollapsed ? '✨' : '✨ Uniflash'}
         </h2>
-        <p className="nav-tagline">Learn Smarter, Study Better</p>
+        {!isCollapsed && <p className="nav-tagline">Learn Smarter, Study Better</p>}
       </div>
 
       <div className="nav-section">

@@ -367,68 +367,6 @@ const Settings = () => {
         </div>
       </section>
 
-      {/* Keyboard Shortcuts Reference */}
-      <section className="settings-section">
-        <h2>⌨️ Keyboard Shortcuts</h2>
-        <div className="shortcuts-grid">
-          <div className="shortcut-group">
-            <h3>Creating Flashcards</h3>
-            <div className="shortcut-item">
-              <kbd>Ctrl</kbd> + <kbd>Enter</kbd>
-              <span>Create flashcard</span>
-            </div>
-            <div className="shortcut-item">
-              <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Enter</kbd>
-              <span>Save & create another</span>
-            </div>
-          </div>
-
-          <div className="shortcut-group">
-            <h3>Review Mode</h3>
-            <div className="shortcut-item">
-              <kbd>Space</kbd>
-              <span>Show answer</span>
-            </div>
-            <div className="shortcut-item">
-              <kbd>1</kbd>
-              <span>Again (forgot)</span>
-            </div>
-            <div className="shortcut-item">
-              <kbd>2</kbd>
-              <span>Hard</span>
-            </div>
-            <div className="shortcut-item">
-              <kbd>3</kbd>
-              <span>Good</span>
-            </div>
-            <div className="shortcut-item">
-              <kbd>4</kbd>
-              <span>Easy</span>
-            </div>
-          </div>
-
-          <div className="shortcut-group">
-            <h3>Practice Mode</h3>
-            <div className="shortcut-item">
-              <kbd>Space</kbd>
-              <span>Show answer</span>
-            </div>
-            <div className="shortcut-item">
-              <kbd>←</kbd>
-              <span>Previous card</span>
-            </div>
-            <div className="shortcut-item">
-              <kbd>→</kbd>
-              <span>Next card</span>
-            </div>
-            <div className="shortcut-item">
-              <kbd>F</kbd>
-              <span>Flag card</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <div className="settings-footer">
         <button className="btn-secondary" onClick={() => navigate('/dashboard')}>
           ← Back to Dashboard
