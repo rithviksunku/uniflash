@@ -33,6 +33,11 @@ const Settings = () => {
     return localStorage.getItem('showKeyboardHints') !== 'false';
   });
 
+  // Force mobile view
+  const [forceMobileView, setForceMobileView] = useState(() => {
+    return localStorage.getItem('forceMobileView') === 'true';
+  });
+
   // Flashcard sets for dropdown
   const [sets, setSets] = useState([]);
   const [showSetModal, setShowSetModal] = useState(false);
@@ -72,6 +77,12 @@ const Settings = () => {
   const saveShowKeyboardHints = (value) => {
     setShowKeyboardHints(value);
     localStorage.setItem('showKeyboardHints', value.toString());
+  };
+
+  const saveForceMobileView = (value) => {
+    setForceMobileView(value);
+    localStorage.setItem('forceMobileView', value.toString());
+    window.dispatchEvent(new CustomEvent('viewModeChange', { detail: { mobile: value } }));
   };
 
   const handleCreateSet = async () => {
@@ -361,6 +372,21 @@ const Settings = () => {
               type="checkbox"
               checked={showKeyboardHints}
               onChange={(e) => saveShowKeyboardHints(e.target.checked)}
+            />
+            <span className="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div className="setting-toggle-item">
+          <div className="setting-info">
+            <label>📱 Mobile View Mode</label>
+            <span className="setting-description">Force mobile-style bottom navigation</span>
+          </div>
+          <label className="toggle-switch">
+            <input
+              type="checkbox"
+              checked={forceMobileView}
+              onChange={(e) => saveForceMobileView(e.target.checked)}
             />
             <span className="toggle-slider"></span>
           </label>

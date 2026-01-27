@@ -100,6 +100,32 @@
   margin-top: 8px;
 }
 
+/* Remember Me Checkbox */
+.remember-me-group {
+  margin-top: -8px;
+}
+
+.remember-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #4a5568;
+  user-select: none;
+}
+
+.remember-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #667eea;
+  cursor: pointer;
+}
+
+.remember-checkbox:hover {
+  color: #2d3748;
+}
+
 /* Responsive */
 @media (max-width: 480px) {
   .login-box {

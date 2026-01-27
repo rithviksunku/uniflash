@@ -41,6 +41,23 @@ const Review = () => {
     };
   });
 
+  // Refresh interval settings from localStorage when component mounts or regains focus
+  useEffect(() => {
+    const refreshSettings = () => {
+      const saved = localStorage.getItem('srsIntervalSettings');
+      if (saved) {
+        setIntervalSettings(JSON.parse(saved));
+      }
+    };
+
+    // Refresh on mount
+    refreshSettings();
+
+    // Also refresh when window gains focus (user returns from Settings)
+    window.addEventListener('focus', refreshSettings);
+    return () => window.removeEventListener('focus', refreshSettings);
+  }, []);
+
   useEffect(() => {
     fetchSets();
     fetchDueCards();

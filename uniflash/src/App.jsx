@@ -28,12 +28,37 @@ function App() {
   const [navCollapsed, setNavCollapsed] = useState(() => {
     return localStorage.getItem('navCollapsed') === 'true';
   });
+  const [forceMobileView, setForceMobileView] = useState(() => {
+    return localStorage.getItem('forceMobileView') === 'true';
+  });
 
   useEffect(() => {
-    // Check if user is already authenticated
+    // Check if user is already authenticated via session
     const authStatus = sessionStorage.getItem('isAuthenticated');
     if (authStatus === 'true') {
       setIsAuthenticated(true);
+    } else {
+      // Check for "Remember me" authentication
+      const rememberAuth = localStorage.getItem('rememberAuth');
+      if (rememberAuth) {
+        try {
+          const { authenticated, expires } = JSON.parse(rememberAuth);
+          const expirationDate = new Date(expires);
+          const now = new Date();
+
+          if (authenticated && expirationDate > now) {
+            // Valid remembered auth - restore session
+            sessionStorage.setItem('isAuthenticated', 'true');
+            setIsAuthenticated(true);
+          } else {
+            // Expired - clear the remembered auth
+            localStorage.removeItem('rememberAuth');
+          }
+        } catch (e) {
+          // Invalid data - clear it
+          localStorage.removeItem('rememberAuth');
+        }
+      }
     }
 
     // Listen for nav toggle events
@@ -41,7 +66,17 @@ function App() {
       setNavCollapsed(e.detail.collapsed);
     };
     window.addEventListener('navToggle', handleNavToggle);
-    return () => window.removeEventListener('navToggle', handleNavToggle);
+
+    // Listen for view mode changes
+    const handleViewModeChange = (e) => {
+      setForceMobileView(e.detail.mobile);
+    };
+    window.addEventListener('viewModeChange', handleViewModeChange);
+
+    return () => {
+      window.removeEventListener('navToggle', handleNavToggle);
+      window.removeEventListener('viewModeChange', handleViewModeChange);
+    };
   }, []);
 
   const handleLogin = (status) => {
@@ -50,6 +85,7 @@ function App() {
 
   const handleLogout = () => {
     sessionStorage.removeItem('isAuthenticated');
+    localStorage.removeItem('rememberAuth');
     setIsAuthenticated(false);
   };
 
@@ -57,9 +93,22 @@ function App() {
     return <Login onLogin={handleLogin} />;
   }
 
+  const toggleMobileView = () => {
+    const newValue = !forceMobileView;
+    setForceMobileView(newValue);
+    localStorage.setItem('forceMobileView', newValue.toString());
+  };
+
   return (
     <Router>
-      <div className={`App ${navCollapsed ? 'nav-collapsed' : ''}`}>
+      <div className={`App ${navCollapsed ? 'nav-collapsed' : ''} ${forceMobileView ? 'force-mobile' : ''}`}>
+        <button
+          className="mobile-view-toggle"
+          onClick={toggleMobileView}
+          title={forceMobileView ? 'Switch to Desktop' : 'Switch to Mobile'}
+        >
+          {forceMobileView ? '🖥️' : '📱'}
+        </button>
         <Navigation onLogout={handleLogout} />
         <div className="main-content">
           <Routes>

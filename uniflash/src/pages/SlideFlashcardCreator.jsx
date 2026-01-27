@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { generateFlashcardsFromSlides } from '../services/openai';
+import { renderPDFPageToImage } from '../services/pdfParser';
 import MultiSetSelector from '../components/MultiSetSelector';
+import ImageCropper from '../components/ImageCropper';
 
 const SlideFlashcardCreator = () => {
   const location = useLocation();
@@ -18,8 +20,17 @@ const SlideFlashcardCreator = () => {
   const [generatingForSlide, setGeneratingForSlide] = useState(null);
   const [editingCard, setEditingCard] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [newCard, setNewCard] = useState({ front: '', back: '' });
+  const [newCard, setNewCard] = useState({ front: '', back: '', image_url: null });
+  const [showAllCards, setShowAllCards] = useState(false);
   const [showNewCardForm, setShowNewCardForm] = useState(false);
+  const [showCropper, setShowCropper] = useState(false);
+
+  // PDF preview state
+  const [presentation, setPresentation] = useState(null);
+  const [pdfData, setPdfData] = useState(null);
+  const [pageImages, setPageImages] = useState({});
+  const [loadingImage, setLoadingImage] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
 
   // Ref for scrolling to cards
   const flashcardsRef = useRef(null);
@@ -34,14 +45,81 @@ const SlideFlashcardCreator = () => {
   const fetchSlides = async () => {
     const { data, error } = await supabase
       .from('slides')
-      .select('*')
+      .select('*, presentations(*)')
       .in('id', slideIds)
       .order('slide_number');
 
     if (!error && data) {
       setSlides(data);
+      // Get presentation info for PDF preview
+      if (data.length > 0 && data[0].presentations) {
+        const pres = data[0].presentations;
+        setPresentation(pres);
+        // Load PDF data if it's a PDF file
+        if (pres.file_type === 'pdf') {
+          loadPdfData(pres.file_path);
+        }
+      }
     }
   };
+
+  const loadPdfData = async (filePath) => {
+    try {
+      console.log('Loading PDF from path:', filePath);
+      const { data, error } = await supabase.storage
+        .from('presentations')
+        .download(filePath);
+
+      if (error) {
+        console.error('Error downloading PDF:', error);
+        return;
+      }
+
+      if (!data) {
+        console.error('No data returned from storage');
+        return;
+      }
+
+      console.log('PDF blob received, size:', data.size);
+      const arrayBuffer = await data.arrayBuffer();
+      console.log('ArrayBuffer created, size:', arrayBuffer.byteLength);
+      setPdfData(arrayBuffer);
+    } catch (err) {
+      console.error('Error loading PDF data:', err);
+    }
+  };
+
+  const loadPageImage = async (pageNumber) => {
+    if (!pdfData || pageImages[pageNumber] || loadingImage) return;
+
+    setLoadingImage(true);
+    try {
+      // Use scale 1.5 for good quality without being too slow
+      const imageUrl = await renderPDFPageToImage(pdfData, pageNumber, 1.5);
+      setPageImages(prev => ({ ...prev, [pageNumber]: imageUrl }));
+    } catch (err) {
+      console.error('Error rendering PDF page:', err);
+      // Try again with lower scale if failed
+      try {
+        const imageUrl = await renderPDFPageToImage(pdfData, pageNumber, 1.0);
+        setPageImages(prev => ({ ...prev, [pageNumber]: imageUrl }));
+      } catch (retryErr) {
+        console.error('Retry also failed:', retryErr);
+      }
+    } finally {
+      setLoadingImage(false);
+    }
+  };
+
+  // Load image when slide changes
+  useEffect(() => {
+    if (pdfData && slides.length > 0 && showPreview) {
+      const currentSlide = slides[currentSlideIndex];
+      if (currentSlide) {
+        loadPageImage(currentSlide.slide_number);
+      }
+    }
+  }, [pdfData, currentSlideIndex, slides, showPreview]);
 
   const fetchSets = async () => {
     const { data, error } = await supabase
@@ -67,6 +145,7 @@ const SlideFlashcardCreator = () => {
         front: card.front || '',
         back: card.back || '',
         slide_id: currentSlide.id,
+        image_url: null, // Can be set to slide image if needed
         isAiGenerated: true,
         isNew: true
       }));
@@ -86,6 +165,54 @@ const SlideFlashcardCreator = () => {
     }
   };
 
+  // Add image from current slide to a flashcard
+  const handleAddImageToCard = (tempId) => {
+    const currentSlide = slides[currentSlideIndex];
+    const imageUrl = pageImages[currentSlide.slide_number];
+    if (imageUrl) {
+      setFlashcards(flashcards.map(card =>
+        card.tempId === tempId ? { ...card, image_url: imageUrl } : card
+      ));
+    }
+  };
+
+  // Remove image from a flashcard
+  const handleRemoveImageFromCard = (tempId) => {
+    setFlashcards(flashcards.map(card =>
+      card.tempId === tempId ? { ...card, image_url: null } : card
+    ));
+  };
+
+  // Open cropper to create image flashcard
+  const handleCreateImageCard = () => {
+    const currentSlide = slides[currentSlideIndex];
+    const imageUrl = pageImages[currentSlide.slide_number];
+    if (!imageUrl) {
+      alert('Please wait for the slide image to load first');
+      return;
+    }
+    setShowCropper(true);
+  };
+
+  // Handle cropped image from cropper
+  const handleCroppedImage = (croppedImageUrl) => {
+    const currentSlide = slides[currentSlideIndex];
+
+    const imageCard = {
+      tempId: `image-${currentSlide.id}-${Date.now()}`,
+      front: `What is shown in this diagram from Slide ${currentSlide.slide_number}?`,
+      back: '',
+      slide_id: currentSlide.id,
+      image_url: croppedImageUrl,
+      isAiGenerated: false,
+      isNew: true
+    };
+
+    setFlashcards([...flashcards, imageCard]);
+    setEditingCard(imageCard.tempId);
+    setShowCropper(false);
+  };
+
   const handleCreateManualCard = () => {
     if (!newCard.front.trim() || !newCard.back.trim()) {
       alert('Please fill in both front and back');
@@ -98,12 +225,13 @@ const SlideFlashcardCreator = () => {
       front: newCard.front.trim(),
       back: newCard.back.trim(),
       slide_id: currentSlide.id,
+      image_url: newCard.image_url || null,
       isAiGenerated: false,
       isNew: true
     };
 
     setFlashcards([...flashcards, manualCard]);
-    setNewCard({ front: '', back: '' });
+    setNewCard({ front: '', back: '', image_url: null });
     setShowNewCardForm(false);
 
     // Scroll to flashcards section
@@ -264,9 +392,43 @@ const SlideFlashcardCreator = () => {
           </div>
 
           <div className="slide-display">
-            <div className="slide-number-badge">
-              Slide {currentSlide.slide_number}
+            <div className="slide-display-header">
+              <div className="slide-number-badge">
+                Slide {currentSlide.slide_number}
+              </div>
+              {presentation?.file_type === 'pdf' && (
+                <button
+                  className={`btn-toggle-preview ${showPreview ? 'active' : ''}`}
+                  onClick={() => setShowPreview(!showPreview)}
+                  title={showPreview ? 'Hide PDF Preview' : 'Show PDF Preview'}
+                >
+                  {showPreview ? '📄 Hide Preview' : '📄 Show Preview'}
+                </button>
+              )}
             </div>
+
+            {/* PDF Preview */}
+            {showPreview && presentation?.file_type === 'pdf' && (
+              <div className="pdf-preview-container">
+                {pageImages[currentSlide.slide_number] ? (
+                  <img
+                    src={pageImages[currentSlide.slide_number]}
+                    alt={`Page ${currentSlide.slide_number}`}
+                    className="pdf-preview-image"
+                  />
+                ) : loadingImage ? (
+                  <div className="pdf-preview-loading">
+                    <span className="loading-spinner">🔄</span> Loading preview...
+                  </div>
+                ) : (
+                  <div className="pdf-preview-placeholder">
+                    <span>📄</span>
+                    <p>PDF Preview</p>
+                  </div>
+                )}
+              </div>
+            )}
+
             <h3 className="slide-title">{currentSlide.title || 'Untitled'}</h3>
             <div className="slide-content-viewer">
               {currentSlide.content}
@@ -282,15 +444,24 @@ const SlideFlashcardCreator = () => {
               {generatingForSlide === currentSlide.id ? (
                 <>🤖 Generating...</>
               ) : (
-                <>🤖 AI Generate Flashcards</>
+                <>🤖 AI Generate</>
               )}
             </button>
             <button
               className="btn-manual-create"
               onClick={() => setShowNewCardForm(!showNewCardForm)}
             >
-              ➕ Create Manual Flashcard
+              ➕ Manual Card
             </button>
+            {presentation?.file_type === 'pdf' && pageImages[currentSlide.slide_number] && (
+              <button
+                className="btn-image-card"
+                onClick={handleCreateImageCard}
+                title="Create flashcard with this slide's image"
+              >
+                🖼️ Image Card
+              </button>
+            )}
           </div>
 
           {showNewCardForm && (
@@ -368,7 +539,7 @@ const SlideFlashcardCreator = () => {
 
                   <div className="flashcard-content-wrapper">
                     {editingCard === card.tempId ? (
-                      <div className="edit-mode-split">
+                      <div className="edit-mode">
                         <div className="edit-fields">
                           <div className="edit-field">
                             <label>Front:</label>
@@ -386,29 +557,42 @@ const SlideFlashcardCreator = () => {
                               rows={3}
                             />
                           </div>
+                          {card.image_url && (
+                            <div className="card-image-preview">
+                              <img src={card.image_url} alt="Card" />
+                              <button
+                                className="btn-remove-image"
+                                onClick={() => handleRemoveImageFromCard(card.tempId)}
+                              >
+                                ✕ Remove Image
+                              </button>
+                            </div>
+                          )}
                           <div className="edit-actions">
+                            {!card.image_url && pageImages[currentSlide.slide_number] && (
+                              <button
+                                onClick={() => handleAddImageToCard(card.tempId)}
+                                className="btn-secondary btn-sm"
+                              >
+                                🖼️ Add Slide Image
+                              </button>
+                            )}
                             <button
                               onClick={() => setEditingCard(null)}
-                              className="btn-secondary btn-sm"
+                              className="btn-primary btn-sm"
                             >
                               Done
                             </button>
                           </div>
                         </div>
-                        <div className="source-slide-view">
-                          <div className="source-label">📄 Source Slide:</div>
-                          <div className="source-slide-content">
-                            <div className="source-slide-title">
-                              {getSlideByCardId(card)?.title || 'Untitled'}
-                            </div>
-                            <div className="source-slide-text">
-                              {getSlideByCardId(card)?.content}
-                            </div>
-                          </div>
-                        </div>
                       </div>
                     ) : (
-                      <div className="view-mode-split">
+                      <div className="view-mode">
+                        {card.image_url && (
+                          <div className="card-image-thumbnail">
+                            <img src={card.image_url} alt="Card" />
+                          </div>
+                        )}
                         <div className="flashcard-preview">
                           <div className="flashcard-side">
                             <div className="side-label">Front:</div>
@@ -419,33 +603,22 @@ const SlideFlashcardCreator = () => {
                             <div className="side-label">Back:</div>
                             <div className="side-content">{card.back}</div>
                           </div>
-                          <div className="card-actions">
-                            <button
-                              onClick={() => setEditingCard(card.tempId)}
-                              className="btn-icon"
-                              title="Edit"
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              onClick={() => handleDeleteCard(card.tempId)}
-                              className="btn-icon btn-danger"
-                              title="Delete"
-                            >
-                              🗑️
-                            </button>
-                          </div>
                         </div>
-                        <div className="source-slide-view">
-                          <div className="source-label">📄 Source Slide:</div>
-                          <div className="source-slide-content">
-                            <div className="source-slide-title">
-                              {getSlideByCardId(card)?.title || 'Untitled'}
-                            </div>
-                            <div className="source-slide-text">
-                              {getSlideByCardId(card)?.content}
-                            </div>
-                          </div>
+                        <div className="card-actions">
+                          <button
+                            onClick={() => setEditingCard(card.tempId)}
+                            className="btn-icon"
+                            title="Edit"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCard(card.tempId)}
+                            className="btn-icon btn-danger"
+                            title="Delete"
+                          >
+                            🗑️
+                          </button>
                         </div>
                       </div>
                     )}
@@ -456,37 +629,43 @@ const SlideFlashcardCreator = () => {
           )}
 
           {allCardsCount > currentSlideCards.length && (
-            <div className="other-slides-section">
-              <div className="other-slides-header">
-                <h3>📚 All Flashcards ({allCardsCount})</h3>
-                <p className="hint">Click on a card to view its source slide</p>
-              </div>
-              <div className="all-flashcards-list">
-                {flashcards.map((card) => {
-                  const sourceSlide = getSlideByCardId(card);
-                  const isCurrentSlide = card.slide_id === slides[currentSlideIndex]?.id;
-                  return (
-                    <div
-                      key={card.tempId}
-                      className={`flashcard-compact ${isCurrentSlide ? 'current' : ''}`}
-                      onClick={() => navigateToCardSlide(card.slide_id)}
-                    >
-                      <div className="compact-header">
-                        <span className="compact-badge">
-                          {card.isAiGenerated ? '🤖' : '✍️'}
-                        </span>
-                        <span className="compact-slide-ref">
-                          Slide {sourceSlide?.slide_number}
-                        </span>
-                        {isCurrentSlide && <span className="current-badge">CURRENT</span>}
+            <div className={`other-slides-section ${showAllCards ? 'expanded' : 'collapsed'}`}>
+              <button
+                className="other-slides-toggle"
+                onClick={() => setShowAllCards(!showAllCards)}
+              >
+                <span>📚 All Flashcards ({allCardsCount})</span>
+                <span className="toggle-icon">{showAllCards ? '▼' : '▶'}</span>
+              </button>
+              {showAllCards && (
+                <div className="all-flashcards-list">
+                  {flashcards.map((card) => {
+                    const sourceSlide = getSlideByCardId(card);
+                    const isCurrentSlide = card.slide_id === slides[currentSlideIndex]?.id;
+                    return (
+                      <div
+                        key={card.tempId}
+                        className={`flashcard-compact ${isCurrentSlide ? 'current' : ''}`}
+                        onClick={() => navigateToCardSlide(card.slide_id)}
+                      >
+                        <div className="compact-header">
+                          <span className="compact-badge">
+                            {card.isAiGenerated ? '🤖' : '✍️'}
+                            {card.image_url && ' 🖼️'}
+                          </span>
+                          <span className="compact-slide-ref">
+                            Slide {sourceSlide?.slide_number}
+                          </span>
+                          {isCurrentSlide && <span className="current-badge">CURRENT</span>}
+                        </div>
+                        <div className="compact-content">
+                          <div className="compact-front">{card.front}</div>
+                        </div>
                       </div>
-                      <div className="compact-content">
-                        <div className="compact-front">{card.front}</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>

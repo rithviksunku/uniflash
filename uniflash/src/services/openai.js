@@ -191,21 +191,37 @@ export const generateFlashcardsFromSlides = async (slides) => {
       `Slide ${idx + 1}: ${slide.title}\n${slide.content}`
     ).join('\n\n');
 
-    const prompt = `You are an expert at creating educational flashcards. Based on the following presentation slides, generate flashcards that help students learn the key concepts.
+    const prompt = `You are an expert medical educator creating flashcards for healthcare students. Based on the following presentation slides, generate high-quality flashcards.
+
+CRITICAL INSTRUCTIONS:
+1. IGNORE metadata (author names, dates, page numbers, copyright, file paths, version numbers)
+2. PRIORITIZE creating flashcards for:
+   - VOCABULARY: Medical terms and their definitions
+   - DRUGS: Drug names, dosages, indications, side effects, contraindications
+   - CAUSE & EFFECT: What causes conditions, what treatments do
+   - KEY FACTS: Statistics, percentages, clinical thresholds
+   - MECHANISMS: How things work (pathophysiology, drug mechanisms)
+   - COMPARISONS: Differences between similar concepts
 
 Slides:
 ${slideContent}
 
-Create 2-3 flashcards per slide. Each flashcard should:
-1. Have a clear question on the front
-2. Have a concise, informative answer on the back
-3. Focus on key concepts, definitions, or important facts
+Create 3-5 flashcards per slide focusing on testable content. Each flashcard should:
+1. Front: A clear, specific question (e.g., "What is the mechanism of action of [drug]?" or "Define [term]")
+2. Back: A concise, accurate answer with key details
+
+FLASHCARD TYPES TO CREATE:
+- Definition cards: "What is [term]?" → "[definition]"
+- Drug cards: "What is [drug] used for?" → "[indication, dosage if mentioned]"
+- Cause/Effect: "What causes [condition]?" → "[cause]" OR "What is the effect of [treatment]?" → "[outcome]"
+- Comparison: "How does [A] differ from [B]?" → "[key differences]"
 
 Return ONLY a JSON array with this exact structure (no markdown, no code blocks):
 [
   {
-    "front": "question or prompt",
-    "back": "answer or explanation",
+    "front": "specific question about the content",
+    "back": "concise, accurate answer",
+    "type": "vocabulary|drug|causeEffect|fact|comparison",
     "sourceIndex": 0
   }
 ]`;
@@ -215,15 +231,15 @@ Return ONLY a JSON array with this exact structure (no markdown, no code blocks)
       messages: [
         {
           role: 'system',
-          content: 'You are an expert educational content creator specializing in creating effective flashcards. Always respond with valid JSON only.'
+          content: 'You are an expert medical educator who creates effective study flashcards. Focus on testable medical content: vocabulary definitions, drug information (names, dosages, uses), cause-effect relationships, and key clinical facts. Ignore presentation metadata like author names and dates. Always respond with valid JSON only.'
         },
         {
           role: 'user',
           content: prompt
         }
       ],
-      temperature: 0.7,
-      max_tokens: 2000
+      temperature: 0.5,
+      max_tokens: 3000
     });
 
     const content = response.choices[0].message.content.trim();
