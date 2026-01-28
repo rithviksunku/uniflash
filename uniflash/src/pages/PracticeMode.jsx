@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 
@@ -16,6 +16,13 @@ const PracticeMode = () => {
   const [showShortcuts, setShowShortcuts] = useState(() => {
     return localStorage.getItem('showKeyboardHints') !== 'false';
   });
+
+  // Touch/swipe handling for mobile
+  const cardRef = useRef(null);
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchEnd, setTouchEnd] = useState(null);
+  const [swipeDirection, setSwipeDirection] = useState(null);
+  const [swipeOffset, setSwipeOffset] = useState(0);
 
   useEffect(() => {
     fetchFlashcardSets();
@@ -142,6 +149,72 @@ const PracticeMode = () => {
           : card
       ));
     }
+  };
+
+  // Touch event handlers for mobile swipe
+  const minSwipeDistance = 50;
+
+  const handleTouchStart = (e) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchMove = (e) => {
+    const currentTouch = e.targetTouches[0].clientX;
+    setTouchEnd(currentTouch);
+
+    // Calculate swipe offset for visual feedback
+    if (touchStart) {
+      const offset = currentTouch - touchStart;
+      setSwipeOffset(offset);
+
+      // Determine swipe direction for visual cues
+      if (Math.abs(offset) > 30) {
+        if (showAnswer) {
+          // When answer is shown, swipe determines navigation
+          if (offset > 0) {
+            setSwipeDirection('right'); // Next
+          } else {
+            setSwipeDirection('left'); // Previous
+          }
+        }
+      } else {
+        setSwipeDirection(null);
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStart || !touchEnd) {
+      setSwipeOffset(0);
+      setSwipeDirection(null);
+      return;
+    }
+
+    const distance = touchEnd - touchStart;
+    const isSwipe = Math.abs(distance) > minSwipeDistance;
+
+    if (isSwipe) {
+      if (!showAnswer) {
+        // If answer not shown, swipe to show
+        setShowAnswer(true);
+      } else {
+        // When answer is shown, swipe to navigate
+        if (distance > 0) {
+          // Swipe right = Next
+          handleNext();
+        } else {
+          // Swipe left = Previous
+          handlePrevious();
+        }
+      }
+    }
+
+    // Reset swipe state
+    setTouchStart(null);
+    setTouchEnd(null);
+    setSwipeOffset(0);
+    setSwipeDirection(null);
   };
 
   // Keyboard shortcuts for practice mode
@@ -344,7 +417,30 @@ const PracticeMode = () => {
       </div>
 
       <div className="practice-card-container">
-        <div className="practice-card-large" onClick={() => !showAnswer && setShowAnswer(true)}>
+        <div
+          ref={cardRef}
+          className={`practice-card-large ${swipeDirection ? `swipe-${swipeDirection}` : ''}`}
+          style={{
+            transform: swipeOffset ? `translateX(${swipeOffset * 0.3}px) rotate(${swipeOffset * 0.02}deg)` : 'none',
+            transition: swipeOffset ? 'none' : 'transform 0.3s ease'
+          }}
+          onClick={() => !showAnswer && setShowAnswer(true)}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          {/* Swipe indicator overlays */}
+          {swipeDirection === 'right' && showAnswer && (
+            <div className="swipe-indicator swipe-next">
+              <span>Next →</span>
+            </div>
+          )}
+          {swipeDirection === 'left' && showAnswer && (
+            <div className="swipe-indicator swipe-prev">
+              <span>← Prev</span>
+            </div>
+          )}
+
           <div className="card-front-practice">
             <div className="card-label-practice">{reverseMode ? 'Answer' : 'Question'}</div>
             <div className="card-text-practice">{reverseMode ? currentCard.back : currentCard.front}</div>
@@ -360,9 +456,17 @@ const PracticeMode = () => {
 
           {!showAnswer && (
             <div className="tap-hint">
-              👆 Tap anywhere or press <kbd>Space</kbd> to reveal {reverseMode ? 'question' : 'answer'}
+              👆 Tap or swipe to reveal {reverseMode ? 'question' : 'answer'}
             </div>
           )}
+
+          <div className="mobile-swipe-hint">
+            {!showAnswer ? (
+              <span>Swipe to show answer</span>
+            ) : (
+              <span>Swipe left (Prev) or right (Next)</span>
+            )}
+          </div>
         </div>
 
         <button

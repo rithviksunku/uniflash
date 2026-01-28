@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 
@@ -14,13 +14,34 @@ const Dashboard = () => {
     longestStreak: 0,
   });
   const [weeklyData, setWeeklyData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch all data in parallel for faster loading
+  const fetchAllData = useCallback(async () => {
+    setLoading(true);
+    try {
+      await Promise.all([
+        fetchDueCards(),
+        fetchReviewStats(),
+        fetchStreakData(),
+        fetchWeeklyData()
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    fetchDueCards();
-    fetchReviewStats();
-    fetchStreakData();
-    fetchWeeklyData();
-  }, []);
+    fetchAllData();
+
+    // Refresh data when page gains focus (returning from review)
+    const handleFocus = () => {
+      fetchAllData();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [fetchAllData]);
 
   const fetchDueCards = async () => {
     const { data, error } = await supabase
@@ -33,12 +54,24 @@ const Dashboard = () => {
     }
   };
 
+  // Helper to get local date string (YYYY-MM-DD) without timezone issues
+  const getLocalDateString = (date = new Date()) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const fetchReviewStats = async () => {
-    const today = new Date().toISOString().split('T')[0];
+    // Use local midnight for today's start
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayISO = today.toISOString();
+
     const { data, error } = await supabase
       .from('review_sessions')
       .select('cards_reviewed, time_spent')
-      .gte('created_at', today);
+      .gte('created_at', todayISO);
 
     if (!error && data) {
       const stats = data.reduce((acc, session) => ({
@@ -71,7 +104,7 @@ const Dashboard = () => {
     for (let i = 6; i >= 0; i--) {
       const date = new Date();
       date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
+      const dateStr = getLocalDateString(date);
 
       days.push({
         date: dateStr,
@@ -80,17 +113,23 @@ const Dashboard = () => {
       });
     }
 
-    const startDate = days[0].date;
+    // Get start of 7 days ago at midnight local time
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 6);
+    startDate.setHours(0, 0, 0, 0);
+
     const { data, error } = await supabase
       .from('review_sessions')
       .select('created_at, cards_reviewed')
-      .gte('created_at', startDate);
+      .gte('created_at', startDate.toISOString());
 
     if (!error) {
       const cardsByDay = {};
       (data || []).forEach(session => {
-        const day = session.created_at.split('T')[0];
-        cardsByDay[day] = (cardsByDay[day] || 0) + session.cards_reviewed;
+        // Convert UTC timestamp to local date
+        const sessionDate = new Date(session.created_at);
+        const localDay = getLocalDateString(sessionDate);
+        cardsByDay[localDay] = (cardsByDay[localDay] || 0) + session.cards_reviewed;
       });
 
       const weekData = days.map(day => ({
@@ -138,9 +177,10 @@ const Dashboard = () => {
       <div className="dashboard-header">
         <h1>✨ Uniflash Dashboard</h1>
         <p className="subtitle">🦄 Learn smarter, not harder</p>
+        {loading && <span className="refreshing-indicator">Refreshing...</span>}
       </div>
 
-      <div className="stats-container">
+      <div className={`stats-container ${loading ? 'stats-loading' : ''}`}>
         <div className={`stat-card streak-card ${streakData.currentStreak >= 7 ? 'streak-fire' : ''}`}>
           <div className="stat-icon streak-icon">{getStreakEmoji(streakData.currentStreak)}</div>
           <div className="stat-value streak-value">{streakData.currentStreak}</div>

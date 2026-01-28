@@ -142,6 +142,28 @@
 .dashboard-header {
   text-align: center;
   margin-bottom: 1.5rem;
+  position: relative;
+}
+
+.refreshing-indicator {
+  display: inline-block;
+  font-size: 0.75rem;
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.1);
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  margin-left: 0.5rem;
+  animation: pulse-fade 1s ease-in-out infinite;
+}
+
+@keyframes pulse-fade {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.stats-container.stats-loading {
+  opacity: 0.7;
+  pointer-events: none;
 }
 
 .dashboard-header h1 {
@@ -2554,6 +2576,25 @@
   flex-direction: column;
   align-items: center;
   width: 100%;
+  overflow: hidden;
+}
+
+.practice-card-large {
+  touch-action: pan-y;
+  position: relative;
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  width: 100%;
+  max-width: 600px;
+  min-height: 300px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.practice-card-large:hover {
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
 }
 
 /* Review Card Container */
@@ -2606,6 +2647,20 @@
   box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
 }
 
+.swipe-indicator.swipe-next {
+  right: 1rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+}
+
+.swipe-indicator.swipe-prev {
+  left: 1rem;
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+  color: white;
+  box-shadow: 0 4px 20px rgba(107, 114, 128, 0.4);
+}
+
 @keyframes pulse {
   0%, 100% { transform: translateY(-50%) scale(1); }
   50% { transform: translateY(-50%) scale(1.05); }
@@ -2619,6 +2674,17 @@
 .review-card.swipe-left {
   border: 3px solid #ef4444;
   box-shadow: 0 0 30px rgba(239, 68, 68, 0.3);
+}
+
+/* Practice mode swipe styles */
+.practice-card-large.swipe-right {
+  border: 3px solid #667eea;
+  box-shadow: 0 0 30px rgba(102, 126, 234, 0.3);
+}
+
+.practice-card-large.swipe-left {
+  border: 3px solid #6b7280;
+  box-shadow: 0 0 30px rgba(107, 114, 128, 0.3);
 }
 
 .secondary-actions {
