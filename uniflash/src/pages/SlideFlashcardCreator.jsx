@@ -686,6 +686,15 @@ const SlideFlashcardCreator = () => {
           )}
         </div>
       </div>
+
+      {/* Image Cropper Modal */}
+      {showCropper && pageImages[currentSlide.slide_number] && (
+        <ImageCropper
+          imageUrl={pageImages[currentSlide.slide_number]}
+          onCrop={handleCroppedImage}
+          onCancel={() => setShowCropper(false)}
+        />
+      )}
     </div>
   );
 };

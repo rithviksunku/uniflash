@@ -802,6 +802,12 @@ const FlashcardList = () => {
                       </td>
                       <td className="col-back">
                         <div className="cell-text">{card.back}</div>
+                        {card.notes && (
+                          <div className="cell-notes">
+                            <span className="notes-indicator">📝</span>
+                            <span className="notes-preview">{card.notes.length > 50 ? card.notes.substring(0, 50) + '...' : card.notes}</span>
+                          </div>
+                        )}
                       </td>
                       <td className="col-set">
                         <select

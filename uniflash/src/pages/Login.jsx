@@ -66,7 +66,6 @@ const Login = ({ onLogin }) => {
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
               />
-              <span className="checkmark"></span>
               Remember this device for 30 days
             </label>
           </div>

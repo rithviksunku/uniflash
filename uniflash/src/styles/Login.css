@@ -113,17 +113,28 @@
   font-size: 0.9rem;
   color: #4a5568;
   user-select: none;
+  padding: 8px 0;
 }
 
 .remember-checkbox input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
+  -webkit-appearance: checkbox;
+  appearance: checkbox;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
   accent-color: #667eea;
   cursor: pointer;
+  margin: 0;
+  flex-shrink: 0;
 }
 
 .remember-checkbox:hover {
   color: #2d3748;
+}
+
+.remember-checkbox:hover input[type="checkbox"] {
+  transform: scale(1.05);
 }
 
 /* Responsive */

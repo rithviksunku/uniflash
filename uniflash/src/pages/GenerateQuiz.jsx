@@ -188,7 +188,8 @@ const GenerateQuiz = () => {
                 <input
                   type="checkbox"
                   checked={selectedSets.includes(set.id)}
-                  onChange={() => {}}
+                  onChange={() => toggleSetSelection(set.id)}
+                  onClick={(e) => e.stopPropagation()}
                 />
                 <span className="set-icon">{set.icon}</span>
                 <span className="set-name">{set.name}</span>

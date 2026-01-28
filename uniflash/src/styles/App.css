@@ -2559,6 +2559,66 @@
 /* Review Card Container */
 .review-card-container {
   width: 100%;
+  overflow: hidden;
+}
+
+.review-card {
+  touch-action: pan-y;
+  position: relative;
+}
+
+/* Mobile Swipe Styles */
+.mobile-swipe-hint {
+  display: none;
+  text-align: center;
+  padding: 0.75rem;
+  color: #6c757d;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: 8px;
+}
+
+.swipe-indicator {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 1.25rem;
+  z-index: 10;
+  pointer-events: none;
+  animation: pulse 0.5s ease-in-out infinite;
+}
+
+.swipe-indicator.swipe-good {
+  right: 1rem;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+}
+
+.swipe-indicator.swipe-again {
+  left: 1rem;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+}
+
+@keyframes pulse {
+  0%, 100% { transform: translateY(-50%) scale(1); }
+  50% { transform: translateY(-50%) scale(1.05); }
+}
+
+.review-card.swipe-right {
+  border: 3px solid #10b981;
+  box-shadow: 0 0 30px rgba(16, 185, 129, 0.3);
+}
+
+.review-card.swipe-left {
+  border: 3px solid #ef4444;
+  box-shadow: 0 0 30px rgba(239, 68, 68, 0.3);
 }
 
 .secondary-actions {
@@ -2566,6 +2626,172 @@
   flex-direction: column;
   gap: 12px;
   margin-top: 16px;
+}
+
+/* Card Notes Section */
+.card-notes-section {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.notes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.notes-label {
+  font-weight: 600;
+  color: #4a5568;
+  font-size: 0.9rem;
+}
+
+.btn-edit-note {
+  background: transparent;
+  border: 1px solid #e2e8f0;
+  color: #667eea;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-edit-note:hover {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+}
+
+.notes-content {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  padding: 1rem;
+  border-radius: 8px;
+  color: #92400e;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  border-left: 4px solid #f59e0b;
+}
+
+.notes-empty {
+  color: #9ca3af;
+  font-size: 0.85rem;
+  font-style: italic;
+  padding: 0.5rem 0;
+}
+
+.notes-empty kbd {
+  background: #e5e7eb;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-family: monospace;
+  border: 1px solid #d1d5db;
+}
+
+.notes-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.notes-editor textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+  transition: border-color 0.2s ease;
+}
+
+.notes-editor textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.notes-editor-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+/* Mobile-specific styles for Review */
+@media (max-width: 768px) {
+  .mobile-swipe-hint {
+    display: block;
+  }
+
+  .card-notes-section {
+    margin-top: 1rem;
+  }
+
+  .notes-editor textarea {
+    font-size: 16px; /* Prevent zoom on iOS */
+  }
+
+  .review-card {
+    padding: 1.5rem;
+    min-height: 300px;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .review-card-container {
+    perspective: 1000px;
+  }
+
+  .rating-buttons-anki {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.5rem !important;
+  }
+
+  .btn-rating {
+    padding: 0.75rem 0.5rem !important;
+    font-size: 0.9rem !important;
+  }
+
+  .rating-label {
+    font-size: 0.85rem !important;
+  }
+
+  .rating-time {
+    font-size: 0.7rem !important;
+  }
+
+  .keyboard-hint {
+    display: none !important;
+  }
+
+  .shortcuts-legend-float {
+    display: none !important;
+  }
+
+  .btn-show-shortcuts {
+    display: none !important;
+  }
+
+  .review-header {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .review-header button {
+    font-size: 0.8rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .btn-toggle, .btn-secondary {
+    flex: 1;
+    min-width: 0;
+  }
 }
 
 /* Flagged Section in FlashcardList */
@@ -4957,6 +5183,28 @@
   margin-top: 0.25rem;
 }
 
+.cell-notes {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-radius: 6px;
+  border-left: 3px solid #f59e0b;
+}
+
+.notes-indicator {
+  font-size: 0.75rem;
+}
+
+.notes-preview {
+  font-size: 0.75rem;
+  color: #92400e;
+  line-height: 1.4;
+  font-style: italic;
+}
+
 /* Table buttons */
 .btn-icon-table {
   background: none;
@@ -5655,4 +5903,80 @@
 
 .swipe-hint {
   animation: swipeHint 2s ease-in-out infinite;
+}
+
+/* Force Mobile Review Styles */
+.App.force-mobile .review {
+  padding: 0.5rem;
+}
+
+.App.force-mobile .review-header {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.App.force-mobile .review-header button {
+  font-size: 0.75rem;
+  padding: 0.4rem 0.6rem;
+}
+
+.App.force-mobile .review-card {
+  padding: 1.25rem;
+  min-height: 280px;
+}
+
+.App.force-mobile .card-front .card-text,
+.App.force-mobile .card-back .card-text {
+  font-size: 1.1rem;
+}
+
+.App.force-mobile .mobile-swipe-hint {
+  display: block;
+}
+
+.App.force-mobile .rating-buttons-anki {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.App.force-mobile .btn-rating {
+  padding: 0.6rem 0.4rem;
+  font-size: 0.85rem;
+}
+
+.App.force-mobile .rating-label {
+  font-size: 0.8rem;
+}
+
+.App.force-mobile .rating-time {
+  font-size: 0.65rem;
+}
+
+.App.force-mobile .keyboard-hint {
+  display: none;
+}
+
+.App.force-mobile .shortcuts-legend-float,
+.App.force-mobile .btn-show-shortcuts {
+  display: none;
+}
+
+.App.force-mobile .btn-text.btn-settings {
+  display: none;
+}
+
+.App.force-mobile .secondary-actions {
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.App.force-mobile .flag-btn {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
+.App.force-mobile .review-progress {
+  margin-bottom: 1rem;
 }

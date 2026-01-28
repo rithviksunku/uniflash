@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 
@@ -28,6 +28,18 @@ const Review = () => {
   const [showShortcuts, setShowShortcuts] = useState(() => {
     return localStorage.getItem('showKeyboardHints') !== 'false';
   });
+
+  // Touch/swipe handling for mobile
+  const cardRef = useRef(null);
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchEnd, setTouchEnd] = useState(null);
+  const [swipeDirection, setSwipeDirection] = useState(null);
+  const [swipeOffset, setSwipeOffset] = useState(0);
+
+  // Notes feature
+  const [editingNote, setEditingNote] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
 
   // Customizable spaced repetition settings
   const [intervalSettings, setIntervalSettings] = useState(() => {
@@ -122,6 +134,14 @@ const Review = () => {
             toggleFlag(cards[currentIndex].id, cards[currentIndex].is_flagged);
           }
           break;
+        case 'n':
+        case 'N':
+          e.preventDefault();
+          if (!editingNote) {
+            setEditingNote(true);
+            setNoteText(cards[currentIndex]?.notes || '');
+          }
+          break;
         default:
           break;
       }
@@ -130,6 +150,111 @@ const Review = () => {
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [showAnswer, showSlide, cards, currentIndex]);
+
+  // Touch event handlers for mobile swipe
+  const minSwipeDistance = 50;
+
+  const handleTouchStart = (e) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchMove = (e) => {
+    const currentTouch = e.targetTouches[0].clientX;
+    setTouchEnd(currentTouch);
+
+    // Calculate swipe offset for visual feedback
+    if (touchStart) {
+      const offset = currentTouch - touchStart;
+      setSwipeOffset(offset);
+
+      // Determine swipe direction for visual cues
+      if (Math.abs(offset) > 30) {
+        if (showAnswer) {
+          // When answer is shown, swipe determines rating
+          if (offset > 0) {
+            setSwipeDirection('right'); // Good/Easy
+          } else {
+            setSwipeDirection('left'); // Again/Hard
+          }
+        }
+      } else {
+        setSwipeDirection(null);
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStart || !touchEnd) {
+      setSwipeOffset(0);
+      setSwipeDirection(null);
+      return;
+    }
+
+    const distance = touchEnd - touchStart;
+    const isSwipe = Math.abs(distance) > minSwipeDistance;
+
+    if (isSwipe) {
+      if (!showAnswer) {
+        // If answer not shown, tap to show (swipe up gesture)
+        setShowAnswer(true);
+      } else {
+        // When answer is shown, swipe to rate
+        if (distance > 0) {
+          // Swipe right = Good
+          handleRating('good');
+        } else {
+          // Swipe left = Again
+          handleRating('again');
+        }
+      }
+    }
+
+    // Reset swipe state
+    setTouchStart(null);
+    setTouchEnd(null);
+    setSwipeOffset(0);
+    setSwipeDirection(null);
+  };
+
+  // Reset note editing state when card changes
+  useEffect(() => {
+    setEditingNote(false);
+    setNoteText(cards[currentIndex]?.notes || '');
+  }, [currentIndex, cards]);
+
+  // Save note to database
+  const handleSaveNote = async () => {
+    const currentCard = cards[currentIndex];
+    if (!currentCard) return;
+
+    setSavingNote(true);
+    try {
+      const { error } = await supabase
+        .from('flashcards')
+        .update({ notes: noteText.trim() || null })
+        .eq('id', currentCard.id);
+
+      if (!error) {
+        // Update local state
+        setCards(cards.map(card =>
+          card.id === currentCard.id
+            ? { ...card, notes: noteText.trim() || null }
+            : card
+        ));
+        setEditingNote(false);
+      }
+    } catch (err) {
+      console.error('Error saving note:', err);
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const handleCancelNote = () => {
+    setNoteText(cards[currentIndex]?.notes || '');
+    setEditingNote(false);
+  };
 
   const fetchSets = async () => {
     const { data, error } = await supabase
@@ -476,6 +601,10 @@ const Review = () => {
               <kbd>F</kbd>
               <span>Flag card</span>
             </div>
+            <div className="shortcut-legend-item">
+              <kbd>N</kbd>
+              <span>Add note</span>
+            </div>
           </div>
         </div>
       )}
@@ -538,7 +667,8 @@ const Review = () => {
                 <input
                   type="checkbox"
                   checked={selectedSets.includes(set.id)}
-                  onChange={() => {}}
+                  onChange={() => toggleSetSelection(set.id)}
+                  onClick={(e) => e.stopPropagation()}
                 />
                 <span className="set-icon">{set.icon}</span>
                 <span className="set-name">{set.name}</span>
@@ -572,7 +702,29 @@ const Review = () => {
         </div>
       ) : (
         <div className="review-card-container">
-          <div className="review-card">
+          <div
+            ref={cardRef}
+            className={`review-card ${swipeDirection ? `swipe-${swipeDirection}` : ''}`}
+            style={{
+              transform: swipeOffset ? `translateX(${swipeOffset * 0.3}px) rotate(${swipeOffset * 0.02}deg)` : 'none',
+              transition: swipeOffset ? 'none' : 'transform 0.3s ease'
+            }}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
+            {/* Swipe indicator overlays */}
+            {swipeDirection === 'right' && showAnswer && (
+              <div className="swipe-indicator swipe-good">
+                <span>Good</span>
+              </div>
+            )}
+            {swipeDirection === 'left' && showAnswer && (
+              <div className="swipe-indicator swipe-again">
+                <span>Again</span>
+              </div>
+            )}
+
             <div className="card-front">
               <div className="card-label">{reverseMode ? 'Answer:' : 'Question:'}</div>
               <div className="card-text">{reverseMode ? currentCard.back : currentCard.front}</div>
@@ -584,6 +736,69 @@ const Review = () => {
                 <div className="card-text">{reverseMode ? currentCard.front : currentCard.back}</div>
               </div>
             )}
+
+            {/* Notes Section - shown after answer */}
+            {showAnswer && (
+              <div className="card-notes-section">
+                <div className="notes-header">
+                  <span className="notes-label">📝 Personal Notes</span>
+                  {!editingNote && (
+                    <button
+                      className="btn-edit-note"
+                      onClick={() => {
+                        setEditingNote(true);
+                        setNoteText(currentCard.notes || '');
+                      }}
+                    >
+                      {currentCard.notes ? '✏️ Edit' : '➕ Add Note'}
+                    </button>
+                  )}
+                </div>
+                {editingNote ? (
+                  <div className="notes-editor">
+                    <textarea
+                      value={noteText}
+                      onChange={(e) => setNoteText(e.target.value)}
+                      placeholder="What was challenging about this card? Add reminders, mnemonics, or explanations..."
+                      rows={3}
+                      autoFocus
+                    />
+                    <div className="notes-editor-actions">
+                      <button
+                        className="btn-secondary btn-sm"
+                        onClick={handleCancelNote}
+                        disabled={savingNote}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="btn-primary btn-sm"
+                        onClick={handleSaveNote}
+                        disabled={savingNote}
+                      >
+                        {savingNote ? 'Saving...' : 'Save Note'}
+                      </button>
+                    </div>
+                  </div>
+                ) : currentCard.notes ? (
+                  <div className="notes-content">
+                    {currentCard.notes}
+                  </div>
+                ) : (
+                  <div className="notes-empty">
+                    <span>No notes yet. Press <kbd>N</kbd> or click "Add Note" to add one.</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="mobile-swipe-hint">
+              {!showAnswer ? (
+                <span>Tap card or swipe to show answer</span>
+              ) : (
+                <span>Swipe left (Again) or right (Good)</span>
+              )}
+            </div>
 
             <div className="review-actions">
               {!showAnswer ? (

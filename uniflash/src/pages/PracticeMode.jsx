@@ -220,7 +220,7 @@ const PracticeMode = () => {
                   <input
                     type="checkbox"
                     checked={selectedSets.includes(set.id)}
-                    onChange={() => {}}
+                    onChange={() => toggleSetSelection(set.id)}
                     onClick={(e) => e.stopPropagation()}
                   />
                   <div className="set-info-practice">
