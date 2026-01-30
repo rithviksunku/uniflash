@@ -138,13 +138,6 @@ const ClozeCardDisplay = ({ clozeData, showAnswer, reverseMode = false }) => {
           }
         })}
       </div>
-
-      {showAnswer && (
-        <div className="cloze-answer-section">
-          <div className="cloze-answer-label">Answer:</div>
-          <div className="cloze-answer-word">{targetWord}</div>
-        </div>
-      )}
     </div>
   );
 };
