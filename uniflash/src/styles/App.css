@@ -6046,3 +6046,280 @@
 .App.force-mobile .review-progress {
   margin-bottom: 1rem;
 }
+
+/* =====================================================
+   CLOZE FLASHCARD STYLES
+   ===================================================== */
+
+/* Card Type Toggle */
+.card-type-toggle {
+  display: flex;
+  background: var(--bg-secondary, #f3f4f6);
+  border-radius: var(--radius, 8px);
+  padding: 0.25rem;
+  margin-bottom: 1.5rem;
+  gap: 0.25rem;
+}
+
+.card-type-btn {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: calc(var(--radius, 8px) - 2px);
+  transition: all 0.2s ease;
+  font-weight: 500;
+  color: var(--text-secondary, #6b7280);
+}
+
+.card-type-btn:hover {
+  background: rgba(147, 51, 234, 0.1);
+}
+
+.card-type-btn.active {
+  background: var(--primary, #9333ea);
+  color: white;
+  box-shadow: 0 2px 4px rgba(147, 51, 234, 0.3);
+}
+
+.card-type-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Cloze Input */
+.cloze-input {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.cloze-help {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary, #6b7280);
+}
+
+.cloze-help-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.cloze-help kbd {
+  background: var(--bg-secondary, #f3f4f6);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  border: 1px solid var(--border, #e5e7eb);
+}
+
+/* Cloze Preview Section */
+.cloze-preview-section {
+  background: var(--bg-secondary, #f3f4f6);
+  border-radius: var(--radius, 8px);
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.cloze-preview-section label {
+  display: block;
+  margin-bottom: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary, #6b7280);
+}
+
+.cloze-preview-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.cloze-preview-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: white;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border, #e5e7eb);
+}
+
+.cloze-preview-num {
+  background: var(--primary, #9333ea);
+  color: white;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.cloze-preview-word {
+  font-weight: 500;
+}
+
+/* ClozeCardDisplay Component Styles */
+.cloze-card {
+  padding: 1.5rem;
+}
+
+.cloze-card-error {
+  color: var(--error, #ef4444);
+  padding: 1rem;
+  text-align: center;
+}
+
+.cloze-text {
+  font-size: 1.25rem;
+  line-height: 1.8;
+  color: var(--text-primary, #1f2937);
+}
+
+.cloze-blank {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  margin: 0 0.25rem;
+  border-radius: 6px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.cloze-blank.cloze-hidden {
+  background: var(--bg-secondary, #f3f4f6);
+  color: var(--text-secondary, #6b7280);
+  border: 2px dashed var(--border, #e5e7eb);
+  min-width: 60px;
+  text-align: center;
+}
+
+.cloze-blank.cloze-revealed {
+  background: linear-gradient(135deg, var(--primary, #9333ea), #7c3aed);
+  color: white;
+  animation: clozeReveal 0.4s ease-out;
+}
+
+@keyframes clozeReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.cloze-other {
+  color: var(--text-primary, #1f2937);
+}
+
+.cloze-answer-section {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border, #e5e7eb);
+}
+
+.cloze-answer-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #6b7280);
+  margin-bottom: 0.5rem;
+}
+
+.cloze-answer-word {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary, #9333ea);
+}
+
+/* Reverse mode styles */
+.cloze-question-label {
+  font-size: 0.9rem;
+  color: var(--text-secondary, #6b7280);
+  margin-bottom: 1rem;
+}
+
+.cloze-answer-hint {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.cloze-target-word {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary, #9333ea);
+}
+
+.cloze-full-context {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border, #e5e7eb);
+}
+
+.cloze-context-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #6b7280);
+  margin-bottom: 0.75rem;
+}
+
+/* FlashcardList Cloze Styles */
+.cloze-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.cloze-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, var(--primary, #9333ea), #7c3aed);
+  color: white;
+  font-size: 0.6rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  width: fit-content;
+}
+
+.cloze-preview-text {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #6b7280);
+  font-style: italic;
+}
+
+.cloze-info {
+  font-size: 0.8rem;
+  color: var(--text-primary, #1f2937);
+}
+
+.cloze-info strong {
+  color: var(--primary, #9333ea);
+}
+
+/* Mobile responsiveness for cloze */
+@media (max-width: 768px) {
+  .card-type-toggle {
+    margin-bottom: 1rem;
+  }
+
+  .card-type-btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+  }
+
+  .cloze-help {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .cloze-text {
+    font-size: 1.1rem;
+  }
+
+  .cloze-target-word {
+    font-size: 1.5rem;
+  }
+}

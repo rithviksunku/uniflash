@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import ClozeCardDisplay from '../components/ClozeCardDisplay';
 
 const PracticeMode = () => {
   const navigate = useNavigate();
@@ -441,17 +442,27 @@ const PracticeMode = () => {
             </div>
           )}
 
-          <div className="card-front-practice">
-            <div className="card-label-practice">{reverseMode ? 'Answer' : 'Question'}</div>
-            <div className="card-text-practice">{reverseMode ? currentCard.back : currentCard.front}</div>
-          </div>
+          {currentCard.card_type === 'cloze' && currentCard.cloze_data ? (
+            <ClozeCardDisplay
+              clozeData={currentCard.cloze_data}
+              showAnswer={showAnswer}
+              reverseMode={reverseMode}
+            />
+          ) : (
+            <>
+              <div className="card-front-practice">
+                <div className="card-label-practice">{reverseMode ? 'Answer' : 'Question'}</div>
+                <div className="card-text-practice">{reverseMode ? currentCard.back : currentCard.front}</div>
+              </div>
 
-          {showAnswer && (
-            <div className="card-back-practice">
-              <div className="divider-practice">•••</div>
-              <div className="card-label-practice">{reverseMode ? 'Question' : 'Answer'}</div>
-              <div className="card-text-practice">{reverseMode ? currentCard.front : currentCard.back}</div>
-            </div>
+              {showAnswer && (
+                <div className="card-back-practice">
+                  <div className="divider-practice">•••</div>
+                  <div className="card-label-practice">{reverseMode ? 'Question' : 'Answer'}</div>
+                  <div className="card-text-practice">{reverseMode ? currentCard.front : currentCard.back}</div>
+                </div>
+              )}
+            </>
           )}
 
           {!showAnswer && (

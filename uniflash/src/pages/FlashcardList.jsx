@@ -181,19 +181,24 @@ const FlashcardList = () => {
   const exportToCSV = () => {
     const cardsToExport = filteredCards.length > 0 ? filteredCards : flashcards;
 
-    // Create CSV content
+    // Create CSV content - just front, back, and set
     const csvRows = [];
-    csvRows.push(['Front', 'Back', 'Set', 'Next Review', 'Interval (days)'].join(','));
+    csvRows.push(['Front', 'Back', 'Set'].join(','));
 
     cardsToExport.forEach(card => {
       const setName = card.flashcard_sets?.name || 'Unassigned';
-      const nextReview = new Date(card.next_review).toLocaleDateString();
+      // For cloze cards, export the source text and answer
+      const frontText = card.card_type === 'cloze' && card.cloze_data
+        ? card.cloze_data.source_text || card.front
+        : card.front;
+      const backText = card.card_type === 'cloze' && card.cloze_data
+        ? `c${card.cloze_data.cloze_number}: ${card.back}`
+        : card.back;
+
       const row = [
-        `"${card.front.replace(/"/g, '""')}"`,
-        `"${card.back.replace(/"/g, '""')}"`,
-        `"${setName}"`,
-        nextReview,
-        card.interval_days
+        `"${frontText.replace(/"/g, '""')}"`,
+        `"${backText.replace(/"/g, '""')}"`,
+        `"${setName}"`
       ].join(',');
       csvRows.push(row);
     });
@@ -204,7 +209,7 @@ const FlashcardList = () => {
     const url = URL.createObjectURL(blob);
 
     link.setAttribute('href', url);
-    link.setAttribute('download', `uniflash_flashcards_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `flashcards_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -224,14 +229,14 @@ const FlashcardList = () => {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Uniflash Flashcards - ${setName}</title>
+        <title>Flashcards - ${setName}</title>
         <style>
           body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #f5f5f5;
           }
           .header {
             text-align: center;
@@ -242,7 +247,7 @@ const FlashcardList = () => {
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
           }
           .header h1 {
-            color: #667eea;
+            color: #333;
             margin: 0 0 10px 0;
           }
           .header p {
@@ -287,7 +292,6 @@ const FlashcardList = () => {
             padding: 4px 12px;
             border-radius: 12px;
             background: #f0f0f0;
-            margin-right: 10px;
           }
           @media print {
             body { background: white; }
@@ -297,26 +301,25 @@ const FlashcardList = () => {
       </head>
       <body>
         <div class="header">
-          <h1>🦄 Uniflash Flashcards</h1>
-          <p>${setName} • ${cardsToExport.length} cards • Exported on ${new Date().toLocaleDateString()}</p>
+          <h1>${setName}</h1>
+          <p>${cardsToExport.length} cards</p>
         </div>
-        ${cardsToExport.map((card, index) => `
-          <div class="flashcard">
-            <div class="flashcard-number">Card ${index + 1} of ${cardsToExport.length}</div>
-            <div class="flashcard-front">
-              <strong>Question:</strong>
-              ${card.front}
-            </div>
-            <div class="flashcard-back">
-              <strong>Answer:</strong>
-              ${card.back}
-            </div>
-            <div class="flashcard-meta">
-              <span class="set-badge">${card.flashcard_sets?.icon || '📚'} ${card.flashcard_sets?.name || 'Unassigned'}</span>
-              <span>Next Review: ${new Date(card.next_review).toLocaleDateString()}</span>
-            </div>
-          </div>
-        `).join('')}
+        ${cardsToExport.map((card, index) => {
+          // Handle cloze cards differently
+          const frontText = card.card_type === 'cloze' && card.cloze_data
+            ? (card.cloze_data.source_text || card.front).replace(/\{\{c\d+::([^}]+)\}\}/g, '[$1]')
+            : card.front;
+          const backText = card.card_type === 'cloze' && card.cloze_data
+            ? 'c' + card.cloze_data.cloze_number + ': ' + card.back
+            : card.back;
+
+          return '<div class="flashcard">' +
+            '<div class="flashcard-number">Card ' + (index + 1) + ' of ' + cardsToExport.length + '</div>' +
+            '<div class="flashcard-front"><strong>Question:</strong> ' + frontText + '</div>' +
+            '<div class="flashcard-back"><strong>Answer:</strong> ' + backText + '</div>' +
+            '<div class="flashcard-meta"><span class="set-badge">' + (card.flashcard_sets?.icon || '📚') + ' ' + (card.flashcard_sets?.name || 'Unassigned') + '</span></div>' +
+          '</div>';
+        }).join('')}
       </body>
       </html>
     `;
@@ -793,15 +796,30 @@ const FlashcardList = () => {
                         </button>
                       </td>
                       <td className="col-front">
-                        <div className="cell-text">{card.front}</div>
-                        {card.slides && (
-                          <div className="cell-source">
-                            📄 Slide {card.slides.slide_number}
+                        {card.card_type === 'cloze' && card.cloze_data ? (
+                          <div className="cloze-cell">
+                            <span className="cloze-badge">CLOZE</span>
+                            <div className="cloze-preview-text">
+                              {card.cloze_data.source_text?.replace(/\{\{c\d+::([^}]+)\}\}/g, '[$1]').substring(0, 60)}
+                              {card.cloze_data.source_text?.length > 60 ? '...' : ''}
+                            </div>
+                            <div className="cloze-info">
+                              c{card.cloze_data.cloze_number}: <strong>{card.back}</strong>
+                            </div>
                           </div>
+                        ) : (
+                          <>
+                            <div className="cell-text">{card.front}</div>
+                            {card.slides && (
+                              <div className="cell-source">
+                                📄 Slide {card.slides.slide_number}
+                              </div>
+                            )}
+                          </>
                         )}
                       </td>
                       <td className="col-back">
-                        <div className="cell-text">{card.back}</div>
+                        <div className="cell-text">{card.card_type === 'cloze' ? card.cloze_data?.extractions?.find(e => e.number === card.cloze_data?.cloze_number)?.word || card.back : card.back}</div>
                         {card.notes && (
                           <div className="cell-notes">
                             <span className="notes-indicator">📝</span>
@@ -827,13 +845,32 @@ const FlashcardList = () => {
                       </td>
                       <td className="col-actions">
                         <div className="table-actions">
-                          <button
-                            onClick={() => handleEdit(card)}
-                            className="btn-icon-table"
-                            title="Edit"
-                          >
-                            ✏️
-                          </button>
+                          {card.card_type === 'cloze' ? (
+                            <button
+                              onClick={() => navigate(`/flashcards/edit/${card.id}`)}
+                              className="btn-icon-table"
+                              title="Edit cloze card"
+                            >
+                              ✏️
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => handleEdit(card)}
+                                className="btn-icon-table"
+                                title="Quick edit"
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                onClick={() => navigate(`/flashcards/edit/${card.id}`)}
+                                className="btn-icon-table"
+                                title="Open in editor"
+                              >
+                                📝
+                              </button>
+                            </>
+                          )}
                           <button
                             onClick={() => handleDelete(card.id)}
                             className="btn-icon-table btn-danger-table"

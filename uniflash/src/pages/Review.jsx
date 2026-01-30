@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import ClozeCardDisplay from '../components/ClozeCardDisplay';
 
 const Review = () => {
   const navigate = useNavigate();
@@ -725,16 +726,26 @@ const Review = () => {
               </div>
             )}
 
-            <div className="card-front">
-              <div className="card-label">{reverseMode ? 'Answer:' : 'Question:'}</div>
-              <div className="card-text">{reverseMode ? currentCard.back : currentCard.front}</div>
-            </div>
+            {currentCard.card_type === 'cloze' && currentCard.cloze_data ? (
+              <ClozeCardDisplay
+                clozeData={currentCard.cloze_data}
+                showAnswer={showAnswer}
+                reverseMode={reverseMode}
+              />
+            ) : (
+              <>
+                <div className="card-front">
+                  <div className="card-label">{reverseMode ? 'Answer:' : 'Question:'}</div>
+                  <div className="card-text">{reverseMode ? currentCard.back : currentCard.front}</div>
+                </div>
 
-            {showAnswer && (
-              <div className="card-back">
-                <div className="card-label">{reverseMode ? 'Question:' : 'Answer:'}</div>
-                <div className="card-text">{reverseMode ? currentCard.front : currentCard.back}</div>
-              </div>
+                {showAnswer && (
+                  <div className="card-back">
+                    <div className="card-label">{reverseMode ? 'Question:' : 'Answer:'}</div>
+                    <div className="card-text">{reverseMode ? currentCard.front : currentCard.back}</div>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Notes Section - shown after answer */}

@@ -124,6 +124,7 @@ function App() {
             <Route path="/sets" element={<FlashcardSets />} />
             <Route path="/flashcards" element={<FlashcardList />} />
             <Route path="/flashcards/create" element={<CreateFlashcard />} />
+            <Route path="/flashcards/edit/:cardId" element={<CreateFlashcard />} />
             <Route path="/flashcards/generate" element={<GenerateFlashcards />} />
             <Route path="/flashcards/editor" element={<InteractiveFlashcardEditor />} />
             <Route path="/flashcards/from-slides" element={<SlideFlashcardCreator />} />
