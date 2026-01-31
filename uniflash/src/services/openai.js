@@ -207,8 +207,14 @@ Slides:
 ${slideContent}
 
 Create 3-5 flashcards per slide focusing on testable content. Each flashcard should:
-1. Front: A clear, specific question (e.g., "What is the mechanism of action of [drug]?" or "Define [term]")
+1. Front: A clear, specific question with ENOUGH CONTEXT to guess the answer. Include the topic/subject being asked about.
+   - BAD: "What is the mechanism of action?" (too vague - which drug?)
+   - GOOD: "What is the mechanism of action of Metformin?"
+   - BAD: "What are the side effects?" (what medication?)
+   - GOOD: "What are the common side effects of ACE inhibitors?"
 2. Back: A concise, accurate answer with key details
+
+CRITICAL: The question (front) must contain enough context that someone could attempt to answer it without seeing the answer. Never create vague questions like "What is this?" or "Describe it" - always include the specific subject.
 
 FLASHCARD TYPES TO CREATE:
 - Definition cards: "What is [term]?" → "[definition]"

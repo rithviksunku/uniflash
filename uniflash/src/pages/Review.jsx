@@ -13,6 +13,7 @@ const Review = () => {
   const [activeTime, setActiveTime] = useState(0); // Total active time in milliseconds
   const [cardStartTime, setCardStartTime] = useState(null); // When current card was shown
   const [reviewedCount, setReviewedCount] = useState(0);
+  const [ratingCounts, setRatingCounts] = useState({ again: 0, hard: 0, good: 0, easy: 0 });
   const [showSlide, setShowSlide] = useState(false);
   const [slideContent, setSlideContent] = useState(null);
   const [sets, setSets] = useState([]);
@@ -29,6 +30,9 @@ const Review = () => {
   const [showShortcuts, setShowShortcuts] = useState(() => {
     return localStorage.getItem('showKeyboardHints') !== 'false';
   });
+
+  // Focus mode - hides all UI except card and rating buttons
+  const [focusMode, setFocusMode] = useState(false);
 
   // Touch/swipe handling for mobile
   const cardRef = useRef(null);
@@ -102,6 +106,13 @@ const Review = () => {
     const handleKeyPress = (e) => {
       // Ignore if in slide view
       if (showSlide) return;
+
+      // Escape or 'z' toggles focus/zen mode
+      if (e.key === 'Escape' || e.key === 'z' || e.key === 'Z') {
+        e.preventDefault();
+        setFocusMode(prev => !prev);
+        return;
+      }
 
       // Spacebar shows answer (works whether answer is shown or not)
       if (e.key === ' ') {
@@ -392,6 +403,7 @@ const Review = () => {
       .eq('id', currentCard.id);
 
     setReviewedCount(reviewedCount + 1);
+    setRatingCounts(prev => ({ ...prev, [rating]: prev[rating] + 1 }));
 
     if (currentIndex < cards.length - 1) {
       setCurrentIndex(currentIndex + 1);
@@ -569,9 +581,18 @@ const Review = () => {
   };
 
   return (
-    <div className="review">
+    <div className={`review ${focusMode ? 'focus-mode' : ''}`}>
+      {/* Focus Mode Toggle */}
+      <button
+        className="btn-focus-toggle"
+        onClick={() => setFocusMode(prev => !prev)}
+        title={focusMode ? 'Exit Focus Mode - Show all controls (press Z or Esc)' : 'Enter Focus Mode - Hide distractions (press Z or Esc)'}
+      >
+        {focusMode ? '🔳' : '🔲'}
+      </button>
+
       {/* Floating Keyboard Shortcuts Legend */}
-      {showShortcuts && (
+      {showShortcuts && !focusMode && (
         <div className="shortcuts-legend-float">
           <div className="shortcuts-legend-header">
             <span>⌨️ Shortcuts</span>
@@ -863,6 +884,13 @@ const Review = () => {
                   </button>
                   <div className="secondary-actions">
                     <button
+                      className="btn-secondary btn-edit-card"
+                      onClick={() => navigate(`/flashcards/edit/${currentCard.id}`)}
+                      title="Edit this flashcard"
+                    >
+                      ✏️ Edit Card
+                    </button>
+                    <button
                       className={`flag-btn ${currentCard.is_flagged ? 'flagged' : ''}`}
                       onClick={() => toggleFlag(currentCard.id, currentCard.is_flagged)}
                       title={currentCard.is_flagged ? 'Unflag this card' : 'Flag as difficult'}
@@ -880,6 +908,35 @@ const Review = () => {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rating Stats Bar */}
+      {reviewedCount > 0 && !focusMode && (
+        <div className="review-stats-bar">
+          <div className="stats-label">Session Stats:</div>
+          <div className="stats-items">
+            <div className="stat-item stat-again">
+              <span className="stat-dot">🔴</span>
+              <span className="stat-count">{ratingCounts.again}</span>
+              <span className="stat-name">Again</span>
+            </div>
+            <div className="stat-item stat-hard">
+              <span className="stat-dot">🟠</span>
+              <span className="stat-count">{ratingCounts.hard}</span>
+              <span className="stat-name">Hard</span>
+            </div>
+            <div className="stat-item stat-good">
+              <span className="stat-dot">🟢</span>
+              <span className="stat-count">{ratingCounts.good}</span>
+              <span className="stat-name">Good</span>
+            </div>
+            <div className="stat-item stat-easy">
+              <span className="stat-dot">🟣</span>
+              <span className="stat-count">{ratingCounts.easy}</span>
+              <span className="stat-name">Easy</span>
             </div>
           </div>
         </div>

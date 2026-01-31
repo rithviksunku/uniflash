@@ -480,16 +480,28 @@ const PracticeMode = () => {
           </div>
         </div>
 
-        <button
-          className={`flag-btn ${currentCard.is_flagged ? 'flagged' : ''}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleFlag(currentCard.id, currentCard.is_flagged);
-          }}
-          title={currentCard.is_flagged ? 'Unflag this card' : 'Flag as difficult'}
-        >
-          {currentCard.is_flagged ? '🚩 Flagged' : '🏳️ Flag'}
-        </button>
+        <div className="card-action-buttons">
+          <button
+            className="btn-secondary btn-edit-card"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/flashcards/edit/${currentCard.id}`);
+            }}
+            title="Edit this flashcard"
+          >
+            ✏️ Edit
+          </button>
+          <button
+            className={`flag-btn ${currentCard.is_flagged ? 'flagged' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFlag(currentCard.id, currentCard.is_flagged);
+            }}
+            title={currentCard.is_flagged ? 'Unflag this card' : 'Flag as difficult'}
+          >
+            {currentCard.is_flagged ? '🚩 Flagged' : '🏳️ Flag'}
+          </button>
+        </div>
       </div>
 
       <div className="practice-controls">

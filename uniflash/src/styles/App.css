@@ -1878,6 +1878,130 @@
   max-width: 800px;
   margin: 0 auto;
   animation: fadeIn 0.5s ease-in-out;
+  position: relative;
+}
+
+/* Focus Mode Toggle Button */
+.btn-focus-toggle {
+  position: fixed;
+  top: 1rem;
+  right: 4rem;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  z-index: 1002;
+  box-shadow: var(--shadow-md);
+  transition: all 0.2s ease;
+}
+
+.btn-focus-toggle:hover {
+  transform: scale(1.1);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--primary);
+}
+
+/* Focus Mode Styles */
+.review.focus-mode {
+  max-width: 100%;
+  padding: 2rem;
+}
+
+.review.focus-mode .shortcuts-legend-float,
+.review.focus-mode .btn-show-shortcuts,
+.review.focus-mode .review-header,
+.review.focus-mode .set-selector,
+.review.focus-mode .mobile-swipe-hint,
+.review.focus-mode .card-notes-section,
+.review.focus-mode .secondary-actions,
+.review.focus-mode .settings-btn,
+.review.focus-mode .keyboard-hint {
+  display: none !important;
+}
+
+.review.focus-mode .review-card-wrapper {
+  min-height: 70vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.review.focus-mode .review-card {
+  min-height: 50vh;
+  max-width: 900px;
+  width: 100%;
+}
+
+.review.focus-mode .rating-buttons-anki {
+  max-width: 800px;
+}
+
+/* Review Stats Bar */
+.review-stats-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem;
+  margin-top: 1.5rem;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.review-stats-bar .stats-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.review-stats-bar .stats-items {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.review-stats-bar .stat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.review-stats-bar .stat-dot {
+  font-size: 0.75rem;
+}
+
+.review-stats-bar .stat-count {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.review-stats-bar .stat-name {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+@media (max-width: 600px) {
+  .review-stats-bar {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .review-stats-bar .stats-items {
+    gap: 1rem;
+  }
+
+  .review-stats-bar .stat-name {
+    display: none;
+  }
 }
 
 .review-progress {
@@ -2537,6 +2661,21 @@
   }
 }
 
+/* Card Action Buttons (Edit, Flag) */
+.card-action-buttons {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.btn-edit-card {
+  padding: 8px 16px !important;
+  font-size: 0.9rem !important;
+  border-radius: 8px !important;
+}
+
 /* Flag Button Styles */
 .flag-btn {
   background: transparent;
@@ -2550,6 +2689,10 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+/* When flag-btn is standalone (not in card-action-buttons) */
+.flag-btn:not(.card-action-buttons .flag-btn) {
   margin-top: 12px;
 }
 

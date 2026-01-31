@@ -73,6 +73,82 @@ const CreateFlashcard = () => {
     setClozeText(textarea.value);
   };
 
+  // Handle toggling between card types with automatic text conversion
+  const handleCardTypeChange = (newType) => {
+    if (newType === cardType) return;
+
+    if (newType === 'cloze' && cardType === 'standard') {
+      // Smart convert standard to cloze
+      if (front.trim() || back.trim()) {
+        const frontText = front.trim();
+        const backText = back.trim();
+        let converted = '';
+        let clozeCount = 1;
+
+        if (frontText && backText) {
+          // Check if back text has multiple "Label: Value" lines
+          const lines = backText.split('\n').map(l => l.trim()).filter(l => l);
+          const colonLines = lines.filter(l => /^[^:]+:\s*.+/.test(l));
+
+          if (colonLines.length > 1 || (colonLines.length === 1 && lines.length === 1 && backText.includes(':'))) {
+            // Back has "Label: Value" format - wrap each value in cloze
+            const convertedLines = lines.map(line => {
+              const colonMatch = line.match(/^([^:]+):\s*(.+)$/);
+              if (colonMatch) {
+                const label = colonMatch[1];
+                const value = colonMatch[2];
+                return `${label}: {{c${clozeCount++}::${value}}}`;
+              }
+              return line;
+            });
+            converted = frontText + '\n' + convertedLines.join('\n');
+          }
+          // Check for blank placeholders to replace
+          else if (/_{2,}|\.{3,}|\[blank\]|\[___\]|\(\s*\)/i.test(frontText)) {
+            converted = frontText.replace(/_{2,}|\.{3,}|\[blank\]|\[___\]|\(\s*\)/i, `{{c1::${backText}}}`);
+          }
+          // Check if front ends with colon - append answer after it
+          else if (frontText.endsWith(':')) {
+            converted = `${frontText} {{c1::${backText}}}`;
+          }
+          // Check if front is a question - append answer
+          else if (frontText.endsWith('?')) {
+            converted = `${frontText} {{c1::${backText}}}`;
+          }
+          // Check for "is/are/was/were" pattern - try to make it a complete sentence
+          else if (/\b(is|are|was|were)\s*$/i.test(frontText)) {
+            converted = `${frontText} {{c1::${backText}}}`;
+          }
+          // Default: combine front and back with cloze
+          else {
+            converted = `${frontText} {{c1::${backText}}}`;
+          }
+        } else if (backText) {
+          converted = `{{c1::${backText}}}`;
+        } else {
+          converted = frontText;
+        }
+
+        setClozeText(converted);
+        setNextClozeNumber(clozeCount);
+      }
+    } else if (newType === 'standard' && cardType === 'cloze') {
+      // Convert cloze to standard: extract text and first cloze word
+      if (clozeText.trim()) {
+        const { extractions } = parseClozeText(clozeText);
+        // Remove all cloze markers to get plain text for front
+        const plainText = clozeText.replace(/\{\{c\d+::([^}]+)\}\}/g, '$1').trim();
+        // Get first cloze word for back
+        const firstCloze = extractions.find(e => e.number === 1) || extractions[0];
+
+        setFront(plainText);
+        setBack(firstCloze?.word || '');
+      }
+    }
+
+    setCardType(newType);
+  };
+
   // Create or update cloze flashcards - one card per unique cloze number
   const handleCreateCloze = async (stayOnPage = false) => {
     // Prevent double submission
@@ -544,7 +620,7 @@ const CreateFlashcard = () => {
           <button
             type="button"
             className={`card-type-btn ${cardType === 'standard' ? 'active' : ''}`}
-            onClick={() => setCardType('standard')}
+            onClick={() => handleCardTypeChange('standard')}
             disabled={creating}
           >
             Standard
@@ -552,7 +628,7 @@ const CreateFlashcard = () => {
           <button
             type="button"
             className={`card-type-btn ${cardType === 'cloze' ? 'active' : ''}`}
-            onClick={() => setCardType('cloze')}
+            onClick={() => handleCardTypeChange('cloze')}
             disabled={creating}
           >
             Cloze

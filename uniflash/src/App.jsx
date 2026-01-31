@@ -31,6 +31,9 @@ function App() {
   const [forceMobileView, setForceMobileView] = useState(() => {
     return localStorage.getItem('forceMobileView') === 'true';
   });
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('darkMode') === 'true';
+  });
 
   useEffect(() => {
     // Check if user is already authenticated via session
@@ -73,9 +76,16 @@ function App() {
     };
     window.addEventListener('viewModeChange', handleViewModeChange);
 
+    // Listen for dark mode changes
+    const handleDarkModeChange = (e) => {
+      setDarkMode(e.detail.darkMode);
+    };
+    window.addEventListener('darkModeChange', handleDarkModeChange);
+
     return () => {
       window.removeEventListener('navToggle', handleNavToggle);
       window.removeEventListener('viewModeChange', handleViewModeChange);
+      window.removeEventListener('darkModeChange', handleDarkModeChange);
     };
   }, []);
 
@@ -101,11 +111,11 @@ function App() {
 
   return (
     <Router>
-      <div className={`App ${navCollapsed ? 'nav-collapsed' : ''} ${forceMobileView ? 'force-mobile' : ''}`}>
+      <div className={`App ${navCollapsed ? 'nav-collapsed' : ''} ${forceMobileView ? 'force-mobile' : ''} ${darkMode ? 'dark-mode' : ''}`}>
         <button
           className="mobile-view-toggle"
           onClick={toggleMobileView}
-          title={forceMobileView ? 'Switch to Desktop' : 'Switch to Mobile'}
+          title={forceMobileView ? 'Switch to Desktop View' : 'Switch to Mobile View (bottom navigation)'}
         >
           {forceMobileView ? '🖥️' : '📱'}
         </button>

@@ -38,6 +38,11 @@ const Settings = () => {
     return localStorage.getItem('forceMobileView') === 'true';
   });
 
+  // Dark mode
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('darkMode') === 'true';
+  });
+
   // Flashcard sets for dropdown
   const [sets, setSets] = useState([]);
   const [showSetModal, setShowSetModal] = useState(false);
@@ -83,6 +88,12 @@ const Settings = () => {
     setForceMobileView(value);
     localStorage.setItem('forceMobileView', value.toString());
     window.dispatchEvent(new CustomEvent('viewModeChange', { detail: { mobile: value } }));
+  };
+
+  const saveDarkMode = (value) => {
+    setDarkMode(value);
+    localStorage.setItem('darkMode', value.toString());
+    window.dispatchEvent(new CustomEvent('darkModeChange', { detail: { darkMode: value } }));
   };
 
   const handleCreateSet = async () => {
@@ -387,6 +398,21 @@ const Settings = () => {
               type="checkbox"
               checked={forceMobileView}
               onChange={(e) => saveForceMobileView(e.target.checked)}
+            />
+            <span className="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div className="setting-toggle-item">
+          <div className="setting-info">
+            <label>🌙 Dark Mode</label>
+            <span className="setting-description">Switch to dark theme for reduced eye strain</span>
+          </div>
+          <label className="toggle-switch">
+            <input
+              type="checkbox"
+              checked={darkMode}
+              onChange={(e) => saveDarkMode(e.target.checked)}
             />
             <span className="toggle-slider"></span>
           </label>
