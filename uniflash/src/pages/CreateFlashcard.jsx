@@ -806,11 +806,18 @@ Use Ctrl+Shift+C (PC) or ⌘+Shift+C (Mac) to wrap selected text."
                 <label>Preview ({parseClozeText(clozeText).uniqueNumbers.length} card{parseClozeText(clozeText).uniqueNumbers.length !== 1 ? 's' : ''} will be created):</label>
                 <div className="cloze-preview-cards">
                   {parseClozeText(clozeText).uniqueNumbers.map(num => {
-                    const extraction = parseClozeText(clozeText).extractions.find(e => e.number === num);
+                    // Get ALL words for this cloze number (there may be multiple)
+                    const wordsForNum = parseClozeText(clozeText).extractions
+                      .filter(e => e.number === num)
+                      .map(e => e.word);
                     return (
                       <div key={num} className="cloze-preview-card">
                         <span className="cloze-preview-num">c{num}</span>
-                        <span className="cloze-preview-word">{extraction?.word}</span>
+                        <span className="cloze-preview-word">
+                          {wordsForNum.length > 1
+                            ? wordsForNum.join(', ')
+                            : wordsForNum[0]}
+                        </span>
                       </div>
                     );
                   })}
