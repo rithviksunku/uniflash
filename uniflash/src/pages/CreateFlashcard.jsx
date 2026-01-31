@@ -35,6 +35,11 @@ const CreateFlashcard = () => {
   const [nextClozeNumber, setNextClozeNumber] = useState(1);
   const clozeInputRef = useRef(null);
 
+  // Store last known state of each mode for toggling
+  const [savedStandard, setSavedStandard] = useState({ front: '', back: '' });
+  const [savedCloze, setSavedCloze] = useState('');
+  const [hasConvertedOnce, setHasConvertedOnce] = useState(false);
+
   // Parse cloze text to extract all cloze markers
   const parseClozeText = (text) => {
     const regex = /\{\{c(\d+)::([^}]+)\}\}/g;
@@ -78,8 +83,11 @@ const CreateFlashcard = () => {
     if (newType === cardType) return;
 
     if (newType === 'cloze' && cardType === 'standard') {
-      // Smart convert standard to cloze
-      if (front.trim() || back.trim()) {
+      // Save current standard state
+      setSavedStandard({ front: front, back: back });
+
+      // Only do smart conversion ONCE (first time toggling with content)
+      if (!hasConvertedOnce && (front.trim() || back.trim())) {
         const frontText = front.trim();
         const backText = back.trim();
         let converted = '';
@@ -130,20 +138,22 @@ const CreateFlashcard = () => {
         }
 
         setClozeText(converted);
+        setSavedCloze(converted);
         setNextClozeNumber(clozeCount);
+        setHasConvertedOnce(true);
+      } else {
+        // Restore previously saved cloze text
+        setClozeText(savedCloze);
+        const { uniqueNumbers } = parseClozeText(savedCloze);
+        setNextClozeNumber(Math.max(...uniqueNumbers, 0) + 1);
       }
     } else if (newType === 'standard' && cardType === 'cloze') {
-      // Convert cloze to standard: extract text and first cloze word
-      if (clozeText.trim()) {
-        const { extractions } = parseClozeText(clozeText);
-        // Remove all cloze markers to get plain text for front
-        const plainText = clozeText.replace(/\{\{c\d+::([^}]+)\}\}/g, '$1').trim();
-        // Get first cloze word for back
-        const firstCloze = extractions.find(e => e.number === 1) || extractions[0];
+      // Save current cloze state
+      setSavedCloze(clozeText);
 
-        setFront(plainText);
-        setBack(firstCloze?.word || '');
-      }
+      // Restore saved standard state
+      setFront(savedStandard.front);
+      setBack(savedStandard.back);
     }
 
     setCardType(newType);
