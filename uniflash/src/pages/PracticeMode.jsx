@@ -14,6 +14,7 @@ const PracticeMode = () => {
   const [loading, setLoading] = useState(true);
   const [reverseMode, setReverseMode] = useState(false); // Review back-to-front
   const [shuffleEnabled, setShuffleEnabled] = useState(false);
+  const [onlyFlagged, setOnlyFlagged] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(() => {
     return localStorage.getItem('showKeyboardHints') !== 'false';
   });
@@ -27,12 +28,11 @@ const PracticeMode = () => {
 
   useEffect(() => {
     fetchFlashcardSets();
-    fetchAllCards();
   }, []);
 
   useEffect(() => {
-    fetchCardsBySelectedSets();
-  }, [selectedSets]);
+    fetchCards();
+  }, [selectedSets, onlyFlagged]);
 
   const fetchFlashcardSets = async () => {
     const { data, error } = await supabase
@@ -46,30 +46,21 @@ const PracticeMode = () => {
     setLoading(false);
   };
 
-  const fetchAllCards = async () => {
-    const { data, error } = await supabase
+  const fetchCards = async () => {
+    let query = supabase
       .from('flashcards')
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (!error) {
-      setCards(data);
-    }
-  };
-
-  const fetchCardsBySelectedSets = async () => {
-    if (selectedSets.length === 0) {
-      // If no sets selected, show all cards
-      fetchAllCards();
-      return;
+    if (selectedSets.length > 0) {
+      query = query.in('set_id', selectedSets);
     }
 
-    const { data, error } = await supabase
-      .from('flashcards')
-      .select('*')
-      .in('set_id', selectedSets)
-      .order('created_at', { ascending: false });
+    if (onlyFlagged) {
+      query = query.eq('is_flagged', true);
+    }
 
+    const { data, error } = await query;
     if (!error) {
       setCards(data || []);
     }
@@ -314,14 +305,24 @@ const PracticeMode = () => {
           <div className="info-card">
             <div className="info-number">{cards.length}</div>
             <div className="info-label">
-              {selectedSets.length === 0 ? 'Total cards (all sets)' :
-               selectedSets.length === 1 ? 'Cards in selected set' :
-               `Cards in ${selectedSets.length} selected sets`}
+              {selectedSets.length === 0
+                ? (onlyFlagged ? 'Flagged cards across all sets' : 'Total cards (all sets)')
+                : selectedSets.length === 1
+                  ? (onlyFlagged ? 'Flagged cards in selected set' : 'Cards in selected set')
+                  : (onlyFlagged ? `Flagged cards in ${selectedSets.length} sets` : `Cards in ${selectedSets.length} selected sets`)}
             </div>
           </div>
         </div>
 
         <div className="practice-options">
+          <label className="toggle-option">
+            <input
+              type="checkbox"
+              checked={onlyFlagged}
+              onChange={(e) => setOnlyFlagged(e.target.checked)}
+            />
+            <span className="toggle-label">🚩 Only Flagged Cards</span>
+          </label>
           <label className="toggle-option">
             <input
               type="checkbox"

@@ -6,12 +6,17 @@ import ClozeCardDisplay from '../components/ClozeCardDisplay';
 const Review = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [cards, setCards] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [showAnswer, setShowAnswer] = useState(false);
+
+  // sessionCards: [{card, dueAt}] sorted by dueAt ascending
+  // Cards rated Again/Hard come back with dueAt = now + configured interval
+  // Cards rated Good/Easy are removed from session (done)
+  const [sessionCards, setSessionCards] = useState([]);
+  const [doneInSession, setDoneInSession] = useState(0);
+  const [sessionTotal, setSessionTotal] = useState(0);
+  const [sessionComplete, setSessionComplete] = useState(false);
+
   const [loading, setLoading] = useState(true);
-  const [activeTime, setActiveTime] = useState(0); // Total active time in milliseconds
-  const [cardStartTime, setCardStartTime] = useState(null); // When current card was shown
+  const [showAnswer, setShowAnswer] = useState(false);
   const [reviewedCount, setReviewedCount] = useState(0);
   const [ratingCounts, setRatingCounts] = useState({ again: 0, hard: 0, good: 0, easy: 0 });
   const [showSlide, setShowSlide] = useState(false);
@@ -19,7 +24,7 @@ const Review = () => {
   const [sets, setSets] = useState([]);
   const [selectedSets, setSelectedSets] = useState([]);
   const [showSetSelector, setShowSetSelector] = useState(false);
-  const [reverseMode, setReverseMode] = useState(false); // Review back-to-front
+  const [reverseMode, setReverseMode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [shuffled, setShuffled] = useState(false);
   const [autoShuffle, setAutoShuffle] = useState(() => {
@@ -30,47 +35,44 @@ const Review = () => {
   const [showShortcuts, setShowShortcuts] = useState(() => {
     return localStorage.getItem('showKeyboardHints') !== 'false';
   });
-
-  // Focus mode - hides all UI except card and rating buttons
   const [focusMode, setFocusMode] = useState(false);
 
-  // Touch/swipe handling for mobile
+  // Touch/swipe
   const cardRef = useRef(null);
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
   const [swipeDirection, setSwipeDirection] = useState(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
 
-  // Notes feature
+  // Notes
   const [editingNote, setEditingNote] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
 
-  // Customizable spaced repetition settings
+  // Timing
+  const cardStartTimeRef = useRef(null);
+  const activeTimeRef = useRef(0);
+
+  // Forces re-render every second during countdown so the timer display updates
+  const [, setTick] = useState(0);
+
   const [intervalSettings, setIntervalSettings] = useState(() => {
     const saved = localStorage.getItem('srsIntervalSettings');
     return saved ? JSON.parse(saved) : {
-      again: { value: 1, unit: 'minutes' },     // 1 minute
-      hard: { value: 6, unit: 'minutes' },      // 6 minutes
-      good: { value: 10, unit: 'minutes' },     // 10 minutes
-      easy: { value: 4, unit: 'days' },         // 4 days
-      maxDays: 365                               // Maximum interval cap
+      again: { value: 1, unit: 'minutes' },
+      hard: { value: 6, unit: 'minutes' },
+      good: { value: 10, unit: 'minutes' },
+      easy: { value: 4, unit: 'days' },
+      maxDays: 365
     };
   });
 
-  // Refresh interval settings from localStorage when component mounts or regains focus
   useEffect(() => {
     const refreshSettings = () => {
       const saved = localStorage.getItem('srsIntervalSettings');
-      if (saved) {
-        setIntervalSettings(JSON.parse(saved));
-      }
+      if (saved) setIntervalSettings(JSON.parse(saved));
     };
-
-    // Refresh on mount
     refreshSettings();
-
-    // Also refresh when window gains focus (user returns from Settings)
     window.addEventListener('focus', refreshSettings);
     return () => window.removeEventListener('focus', refreshSettings);
   }, []);
@@ -80,12 +82,9 @@ const Review = () => {
     fetchDueCards();
     const setParam = searchParams.get('set');
     const setsParam = searchParams.get('sets');
-
     if (setsParam) {
-      // Handle multiple sets (comma-separated)
       setSelectedSets(setsParam.split(','));
     } else if (setParam) {
-      // Handle single set
       setSelectedSets([setParam]);
     }
   }, []);
@@ -94,165 +93,117 @@ const Review = () => {
     fetchDueCards();
   }, [selectedSets]);
 
-  // Start timing when a card is first shown or when returning from slide view
+  // Countdown ticker: fires every second while waiting for the next card to become due
   useEffect(() => {
-    if (!loading && cards.length > 0 && !showSlide) {
-      setCardStartTime(Date.now());
-    }
-  }, [currentIndex, loading, cards, showSlide]);
+    if (sessionComplete || sessionCards.length === 0) return;
+    const firstDueAt = sessionCards[0]?.dueAt;
+    if (!firstDueAt || firstDueAt <= new Date()) return;
 
-  // Keyboard shortcuts for Anki-style rating
+    const timer = setInterval(() => {
+      setTick(t => t + 1);
+      if (new Date() >= firstDueAt) clearInterval(timer);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [sessionCards, sessionComplete]);
+
+  // Reset timer when current card changes
+  useEffect(() => {
+    const currentCard = sessionCards[0];
+    if (!loading && currentCard && currentCard.dueAt <= new Date() && !showSlide) {
+      cardStartTimeRef.current = Date.now();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionCards[0]?.card?.id, loading, showSlide]);
+
+  // Reset note when card changes
+  useEffect(() => {
+    setEditingNote(false);
+    setNoteText(sessionCards[0]?.card?.notes || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionCards[0]?.card?.id]);
+
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e) => {
-      // Ignore if in slide view
       if (showSlide) return;
-
-      // Escape or 'z' toggles focus/zen mode
       if (e.key === 'Escape' || e.key === 'z' || e.key === 'Z') {
         e.preventDefault();
         setFocusMode(prev => !prev);
         return;
       }
-
-      // Spacebar shows answer (works whether answer is shown or not)
       if (e.key === ' ') {
         e.preventDefault();
-        if (!showAnswer) {
-          setShowAnswer(true);
-        }
+        if (!showAnswer && !isWaiting()) setShowAnswer(true);
         return;
       }
-
-      // Rating shortcuts only work when answer is shown
-      if (!showAnswer) return;
-
-      switch(e.key) {
-        case '1':
-          handleRating('again');
-          break;
-        case '2':
-          handleRating('hard');
-          break;
-        case '3':
-          handleRating('good');
-          break;
-        case '4':
-          handleRating('easy');
-          break;
-        case 'f':
-        case 'F':
+      if (!showAnswer || isWaiting()) return;
+      switch (e.key) {
+        case '1': handleRating('again'); break;
+        case '2': handleRating('hard'); break;
+        case '3': handleRating('good'); break;
+        case '4': handleRating('easy'); break;
+        case 'f': case 'F':
           e.preventDefault();
-          if (cards[currentIndex]) {
-            toggleFlag(cards[currentIndex].id, cards[currentIndex].is_flagged);
-          }
+          if (sessionCards[0]?.card) toggleFlag(sessionCards[0].card.id, sessionCards[0].card.is_flagged);
           break;
-        case 'n':
-        case 'N':
+        case 'n': case 'N':
           e.preventDefault();
           if (!editingNote) {
             setEditingNote(true);
-            setNoteText(cards[currentIndex]?.notes || '');
+            setNoteText(sessionCards[0]?.card?.notes || '');
           }
           break;
-        default:
-          break;
+        default: break;
       }
     };
-
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [showAnswer, showSlide, cards, currentIndex]);
+  }, [showAnswer, showSlide, sessionCards, editingNote]);
 
-  // Touch event handlers for mobile swipe
   const minSwipeDistance = 50;
-
   const handleTouchStart = (e) => {
     setTouchEnd(null);
     setTouchStart(e.targetTouches[0].clientX);
   };
-
   const handleTouchMove = (e) => {
     const currentTouch = e.targetTouches[0].clientX;
     setTouchEnd(currentTouch);
-
-    // Calculate swipe offset for visual feedback
     if (touchStart) {
       const offset = currentTouch - touchStart;
       setSwipeOffset(offset);
-
-      // Determine swipe direction for visual cues
-      if (Math.abs(offset) > 30) {
-        if (showAnswer) {
-          // When answer is shown, swipe determines rating
-          if (offset > 0) {
-            setSwipeDirection('right'); // Good/Easy
-          } else {
-            setSwipeDirection('left'); // Again/Hard
-          }
-        }
+      if (Math.abs(offset) > 30 && showAnswer) {
+        setSwipeDirection(offset > 0 ? 'right' : 'left');
       } else {
         setSwipeDirection(null);
       }
     }
   };
-
   const handleTouchEnd = () => {
-    if (!touchStart || !touchEnd) {
-      setSwipeOffset(0);
-      setSwipeDirection(null);
-      return;
-    }
-
+    if (!touchStart || !touchEnd) { setSwipeOffset(0); setSwipeDirection(null); return; }
     const distance = touchEnd - touchStart;
-    const isSwipe = Math.abs(distance) > minSwipeDistance;
-
-    if (isSwipe) {
-      if (!showAnswer) {
-        // If answer not shown, tap to show (swipe up gesture)
-        setShowAnswer(true);
-      } else {
-        // When answer is shown, swipe to rate
-        if (distance > 0) {
-          // Swipe right = Good
-          handleRating('good');
-        } else {
-          // Swipe left = Again
-          handleRating('again');
-        }
-      }
+    if (Math.abs(distance) > minSwipeDistance) {
+      if (!showAnswer) setShowAnswer(true);
+      else if (distance > 0) handleRating('good');
+      else handleRating('again');
     }
-
-    // Reset swipe state
-    setTouchStart(null);
-    setTouchEnd(null);
-    setSwipeOffset(0);
-    setSwipeDirection(null);
+    setTouchStart(null); setTouchEnd(null); setSwipeOffset(0); setSwipeDirection(null);
   };
 
-  // Reset note editing state when card changes
-  useEffect(() => {
-    setEditingNote(false);
-    setNoteText(cards[currentIndex]?.notes || '');
-  }, [currentIndex, cards]);
-
-  // Save note to database
   const handleSaveNote = async () => {
-    const currentCard = cards[currentIndex];
+    const currentCard = sessionCards[0]?.card;
     if (!currentCard) return;
-
     setSavingNote(true);
     try {
       const { error } = await supabase
         .from('flashcards')
         .update({ notes: noteText.trim() || null })
         .eq('id', currentCard.id);
-
       if (!error) {
-        // Update local state
-        setCards(cards.map(card =>
-          card.id === currentCard.id
-            ? { ...card, notes: noteText.trim() || null }
-            : card
+        setSessionCards(prev => prev.map(item =>
+          item.card.id === currentCard.id
+            ? { ...item, card: { ...item.card, notes: noteText.trim() || null } }
+            : item
         ));
         setEditingNote(false);
       }
@@ -264,162 +215,133 @@ const Review = () => {
   };
 
   const handleCancelNote = () => {
-    setNoteText(cards[currentIndex]?.notes || '');
+    setNoteText(sessionCards[0]?.card?.notes || '');
     setEditingNote(false);
   };
 
   const fetchSets = async () => {
-    const { data, error } = await supabase
-      .from('flashcard_sets')
-      .select('*')
-      .order('name');
-
-    if (!error) {
-      setSets(data || []);
-    }
+    const { data, error } = await supabase.from('flashcard_sets').select('*').order('name');
+    if (!error) setSets(data || []);
   };
 
   const fetchDueCards = async () => {
     let query = supabase
       .from('flashcards')
-      .select(`
-        *,
-        slides (
-          title,
-          content,
-          slide_number
-        ),
-        flashcard_sets (
-          name,
-          color,
-          icon
-        )
-      `)
+      .select(`*, slides (title, content, slide_number), flashcard_sets (name, color, icon)`)
       .lte('next_review', new Date().toISOString());
-
-    // Filter by selected sets if any
-    if (selectedSets.length > 0) {
-      query = query.in('set_id', selectedSets);
-    }
-
+    if (selectedSets.length > 0) query = query.in('set_id', selectedSets);
     const { data, error } = await query.order('next_review');
-
     if (!error && data) {
-      setCards(data);
+      const now = new Date();
+      const initial = data.map(card => ({ card, dueAt: now }));
+      setSessionCards(initial);
+      setSessionTotal(data.length);
+      setDoneInSession(0);
+      setSessionComplete(false);
+      activeTimeRef.current = 0;
     }
     setLoading(false);
   };
 
   const toggleSetSelection = (setId) => {
-    if (selectedSets.includes(setId)) {
-      setSelectedSets(selectedSets.filter(id => id !== setId));
-    } else {
-      setSelectedSets([...selectedSets, setId]);
-    }
+    setSelectedSets(prev =>
+      prev.includes(setId) ? prev.filter(id => id !== setId) : [...prev, setId]
+    );
   };
 
-  // Helper to convert interval setting to days
   const getIntervalInDays = (setting, currentIntervalDays = 1) => {
     const { value, unit } = setting;
     switch (unit) {
-      case 'minutes':
-        return Math.max(1, Math.round(value / 1440)); // Convert minutes to days (min 1 day)
-      case 'hours':
-        return Math.max(1, Math.round(value / 24));
-      case 'days':
-        return value;
-      case 'multiplier':
-        return Math.max(1, Math.round(currentIntervalDays * value));
-      default:
-        return 1;
+      case 'minutes': return Math.max(1, Math.round(value / 1440));
+      case 'hours': return Math.max(1, Math.round(value / 24));
+      case 'days': return value;
+      case 'multiplier': return Math.max(1, Math.round(currentIntervalDays * value));
+      default: return 1;
     }
   };
 
-  // Helper to get next review time (for sub-day intervals, still schedule for today/soon)
+  // Returns the Date when this card should next be reviewed
   const getNextReviewTime = (setting) => {
     const { value, unit } = setting;
     const now = new Date();
     switch (unit) {
-      case 'minutes':
-        now.setMinutes(now.getMinutes() + value);
-        return now;
-      case 'hours':
-        now.setHours(now.getHours() + value);
-        return now;
-      case 'days':
-        now.setDate(now.getDate() + value);
-        return now;
-      case 'multiplier':
-        // Multiplier-based intervals use days
-        return now;
-      default:
-        now.setDate(now.getDate() + 1);
-        return now;
+      case 'minutes': now.setMinutes(now.getMinutes() + value); return now;
+      case 'hours': now.setHours(now.getHours() + value); return now;
+      case 'days': now.setDate(now.getDate() + value); return now;
+      case 'multiplier': return now;
+      default: now.setDate(now.getDate() + 1); return now;
     }
   };
 
   const handleRating = async (rating) => {
-    // Add time spent on this card to active time
-    if (cardStartTime) {
-      const timeOnCard = Date.now() - cardStartTime;
-      setActiveTime(activeTime + timeOnCard);
+    const sessionItem = sessionCards[0];
+    if (!sessionItem) return;
+    const { card } = sessionItem;
+
+    if (cardStartTimeRef.current) {
+      activeTimeRef.current += Date.now() - cardStartTimeRef.current;
+      cardStartTimeRef.current = Date.now();
     }
 
-    const currentCard = cards[currentIndex];
-    const currentInterval = currentCard.interval_days || 1;
-    let newInterval;
-    let nextReview;
-
-    // Use customizable intervals
+    const currentInterval = card.interval_days || 1;
     const setting = intervalSettings[rating];
+    let newInterval;
+    let nextReviewDate;
 
     if (setting.unit === 'multiplier') {
-      // Multiplier-based (traditional Anki-style)
       newInterval = Math.max(1, Math.round(currentInterval * setting.value));
-      nextReview = new Date();
-      nextReview.setDate(nextReview.getDate() + Math.min(newInterval, intervalSettings.maxDays));
+      nextReviewDate = new Date();
+      nextReviewDate.setDate(nextReviewDate.getDate() + Math.min(newInterval, intervalSettings.maxDays));
     } else {
-      // Fixed interval
       newInterval = getIntervalInDays(setting, currentInterval);
-      nextReview = getNextReviewTime(setting);
-
-      // For multiplier-based progression on future reviews
+      nextReviewDate = getNextReviewTime(setting);
       if (setting.unit === 'minutes' || setting.unit === 'hours') {
-        // Keep interval_days small for recently-reviewed cards
         newInterval = Math.max(1, Math.ceil(getIntervalInDays(setting)));
       }
     }
-
-    // Apply max days cap
     newInterval = Math.min(newInterval, intervalSettings.maxDays);
 
     await supabase
       .from('flashcards')
       .update({
         interval_days: newInterval,
-        next_review: nextReview.toISOString(),
+        next_review: nextReviewDate.toISOString(),
         last_reviewed: new Date().toISOString(),
       })
-      .eq('id', currentCard.id);
+      .eq('id', card.id);
 
-    setReviewedCount(reviewedCount + 1);
+    const newReviewedCount = reviewedCount + 1;
+    setReviewedCount(newReviewedCount);
     setRatingCounts(prev => ({ ...prev, [rating]: prev[rating] + 1 }));
 
-    if (currentIndex < cards.length - 1) {
-      setCurrentIndex(currentIndex + 1);
+    const isCompleted = rating === 'good' || rating === 'easy';
+
+    if (isCompleted) {
+      const remaining = sessionCards.slice(1);
+      const newDone = doneInSession + 1;
+      setDoneInSession(newDone);
+      setSessionCards(remaining);
       setShowAnswer(false);
       setShowSlide(false);
+      if (remaining.length === 0) {
+        setSessionComplete(true);
+        finishReview(newReviewedCount);
+      }
     } else {
-      finishReview();
+      // Again/Hard: schedule card for later using the configured interval, re-sort by dueAt
+      const updatedCard = { ...card, interval_days: newInterval };
+      const remaining = sessionCards.slice(1);
+      const requeued = [...remaining, { card: updatedCard, dueAt: nextReviewDate }];
+      requeued.sort((a, b) => a.dueAt - b.dueAt);
+      setSessionCards(requeued);
+      setShowAnswer(false);
+      setShowSlide(false);
     }
   };
 
   const handleDontUnderstand = () => {
-    const currentCard = cards[currentIndex];
-    if (currentCard.slides) {
-      setSlideContent(currentCard.slides);
-      setShowSlide(true);
-    }
+    const card = sessionCards[0]?.card;
+    if (card?.slides) { setSlideContent(card.slides); setShowSlide(true); }
   };
 
   const toggleFlag = async (cardId, currentFlagStatus) => {
@@ -427,30 +349,31 @@ const Review = () => {
       .from('flashcards')
       .update({ is_flagged: !currentFlagStatus })
       .eq('id', cardId);
-
     if (!error) {
-      // Update local state
-      setCards(cards.map(card =>
-        card.id === cardId
-          ? { ...card, is_flagged: !currentFlagStatus }
-          : card
+      setSessionCards(prev => prev.map(item =>
+        item.card.id === cardId
+          ? { ...item, card: { ...item.card, is_flagged: !currentFlagStatus } }
+          : item
       ));
     }
   };
 
-  // Fisher-Yates shuffle algorithm
-  const shuffleCards = (cardsToShuffle) => {
-    const shuffledCards = [...cardsToShuffle];
-    for (let i = shuffledCards.length - 1; i > 0; i--) {
+  const shuffleCards = (arr) => {
+    const s = [...arr];
+    for (let i = s.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [shuffledCards[i], shuffledCards[j]] = [shuffledCards[j], shuffledCards[i]];
+      [s[i], s[j]] = [s[j], s[i]];
     }
-    return shuffledCards;
+    return s;
   };
 
   const handleShuffle = () => {
-    setCards(shuffleCards(cards));
-    setCurrentIndex(0);
+    // Shuffle only the cards that are already due; preserve order of future-scheduled cards
+    const now = new Date();
+    const dueNow = sessionCards.filter(item => item.dueAt <= now);
+    const future = sessionCards.filter(item => item.dueAt > now);
+    const shuffled = shuffleCards(dueNow);
+    setSessionCards([...shuffled, ...future]);
     setShowAnswer(false);
     setShuffled(true);
   };
@@ -466,99 +389,74 @@ const Review = () => {
     localStorage.setItem('srsIntervalSettings', JSON.stringify(newSettings));
   };
 
-  const formatIntervalDisplay = (setting) => {
-    const { value, unit } = setting;
-    if (unit === 'multiplier') {
-      return `×${value}`;
-    }
-    if (unit === 'minutes' && value < 60) {
-      return `${value}m`;
-    }
-    if (unit === 'minutes' && value >= 60) {
-      return `${Math.round(value / 60)}h`;
-    }
-    if (unit === 'hours') {
-      return `${value}h`;
-    }
-    return `${value}d`;
-  };
-
   const getIntervalPreview = (rating) => {
     const setting = intervalSettings[rating];
-    const currentInterval = cards[currentIndex]?.interval_days || 1;
-
+    const currentInterval = sessionCards[0]?.card?.interval_days || 1;
     if (setting.unit === 'multiplier') {
-      const newInterval = Math.min(Math.max(1, Math.round(currentInterval * setting.value)), intervalSettings.maxDays);
-      return `${newInterval} day${newInterval !== 1 ? 's' : ''}`;
+      const n = Math.min(Math.max(1, Math.round(currentInterval * setting.value)), intervalSettings.maxDays);
+      return `${n} day${n !== 1 ? 's' : ''}`;
     }
-    if (setting.unit === 'minutes') {
-      return `${setting.value} min`;
-    }
-    if (setting.unit === 'hours') {
-      return `${setting.value} hr${setting.value !== 1 ? 's' : ''}`;
-    }
+    if (setting.unit === 'minutes') return `${setting.value} min`;
+    if (setting.unit === 'hours') return `${setting.value} hr${setting.value !== 1 ? 's' : ''}`;
     return `${setting.value} day${setting.value !== 1 ? 's' : ''}`;
   };
 
-  const finishReview = async () => {
-    // Add time spent on the last card
-    let finalActiveTime = activeTime;
-    if (cardStartTime) {
-      const timeOnLastCard = Date.now() - cardStartTime;
-      finalActiveTime += timeOnLastCard;
-    }
-
-    // Convert to seconds
-    const timeSpent = Math.round(finalActiveTime / 1000);
-
-    await supabase
-      .from('review_sessions')
-      .insert([
-        {
-          cards_reviewed: reviewedCount + 1,
-          time_spent: timeSpent,
-          created_at: new Date().toISOString(),
-        }
-      ]);
-
-    // Fetch updated streak data
+  const finishReview = async (totalRatings) => {
+    const timeSpent = Math.round(activeTimeRef.current / 1000);
+    await supabase.from('review_sessions').insert([{
+      cards_reviewed: totalRatings || reviewedCount,
+      time_spent: timeSpent,
+      created_at: new Date().toISOString(),
+    }]);
     const { data: streakResult } = await supabase
-      .from('study_streaks')
-      .select('current_streak')
-      .single();
-
-    if (streakResult) {
-      setStreakData({ currentStreak: streakResult.current_streak });
-    }
-
-    // Show celebration before navigating
+      .from('study_streaks').select('current_streak').single();
+    if (streakResult) setStreakData({ currentStreak: streakResult.current_streak });
     setShowCelebration(true);
-    setTimeout(() => {
-      navigate('/dashboard');
-    }, 2500);
+    setTimeout(() => navigate('/dashboard'), 2500);
   };
 
-  // Create confetti pieces
   const createConfetti = () => {
     const colors = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#a78bfa', '#f472b6'];
-    const pieces = [];
-    for (let i = 0; i < 50; i++) {
-      pieces.push({
-        id: i,
-        left: Math.random() * 100,
-        delay: Math.random() * 1,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        rotation: Math.random() * 360,
-      });
-    }
-    return pieces;
+    return Array.from({ length: 50 }, (_, i) => ({
+      id: i,
+      left: Math.random() * 100,
+      delay: Math.random() * 1,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      rotation: Math.random() * 360,
+    }));
   };
 
-  if (loading) {
-    return <div className="loading">Loading review cards...</div>;
-  }
+  const formatCountdown = (ms) => {
+    const totalSeconds = Math.ceil(ms / 1000);
+    if (totalSeconds < 60) return `${totalSeconds}s`;
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins}m ${secs}s`;
+  };
 
-  if (cards.length === 0) {
+  // Skip the wait — pull the next card forward to now
+  const skipWait = () => {
+    setSessionCards(prev => {
+      if (prev.length === 0) return prev;
+      const [first, ...rest] = prev;
+      return [{ ...first, dueAt: new Date() }, ...rest];
+    });
+  };
+
+  // Helpers recomputed every render so countdown stays current
+  const isWaiting = () => {
+    const first = sessionCards[0];
+    return first && first.dueAt > new Date();
+  };
+  const msUntilNext = () => {
+    const first = sessionCards[0];
+    if (!first) return 0;
+    return Math.max(0, first.dueAt - new Date());
+  };
+
+  if (loading) return <div className="loading">Loading review cards...</div>;
+
+  if (sessionCards.length === 0 && !sessionComplete) {
     return (
       <div className="review-empty">
         <h2>🎉 All caught up!</h2>
@@ -570,28 +468,57 @@ const Review = () => {
     );
   }
 
-  const currentCard = cards[currentIndex];
-  const progress = ((currentIndex + 1) / cards.length) * 100;
+  if (sessionComplete) {
+    return (
+      <>
+        {showCelebration && (
+          <>
+            <div className="celebration-overlay">
+              {createConfetti().map(piece => (
+                <div key={piece.id} className="confetti-piece" style={{
+                  left: `${piece.left}%`,
+                  backgroundColor: piece.color,
+                  animationDelay: `${piece.delay}s`,
+                  transform: `rotate(${piece.rotation}deg)`,
+                }} />
+              ))}
+            </div>
+            <div className="celebration-modal">
+              <div className="celebration-content">
+                <div className="celebration-emoji">🎉</div>
+                <h2>Amazing Work!</h2>
+                <p>You completed all {sessionTotal} cards!</p>
+                {streakData.currentStreak > 0 && (
+                  <div className="streak-celebration">
+                    <span className="streak-fire-emoji">🔥</span>
+                    <span>{streakData.currentStreak} Day Streak!</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </>
+    );
+  }
 
-  const getSelectedSetNames = () => {
-    return sets
-      .filter(set => selectedSets.includes(set.id))
-      .map(set => `${set.icon} ${set.name}`)
-      .join(', ');
-  };
+  const waiting = isWaiting();
+  const currentCard = waiting ? null : sessionCards[0]?.card;
+  const progress = sessionTotal > 0 ? (doneInSession / sessionTotal) * 100 : 0;
+
+  const getSelectedSetNames = () =>
+    sets.filter(s => selectedSets.includes(s.id)).map(s => `${s.icon} ${s.name}`).join(', ');
 
   return (
     <div className={`review ${focusMode ? 'focus-mode' : ''}`}>
-      {/* Focus Mode Toggle */}
       <button
         className="btn-focus-toggle"
         onClick={() => setFocusMode(prev => !prev)}
-        title={focusMode ? 'Exit Focus Mode - Show all controls (press Z or Esc)' : 'Enter Focus Mode - Hide distractions (press Z or Esc)'}
+        title={focusMode ? 'Exit Focus Mode (Z)' : 'Enter Focus Mode (Z)'}
       >
         {focusMode ? '🔳' : '🔲'}
       </button>
 
-      {/* Floating Keyboard Shortcuts Legend */}
       {showShortcuts && !focusMode && (
         <div className="shortcuts-legend-float">
           <div className="shortcuts-legend-header">
@@ -599,42 +526,15 @@ const Review = () => {
             <button className="btn-close-legend" onClick={() => setShowShortcuts(false)}>×</button>
           </div>
           <div className="shortcuts-legend-items">
-            <div className="shortcut-legend-item">
-              <kbd>Space</kbd>
-              <span>Show answer</span>
-            </div>
-            <div className="shortcut-legend-item">
-              <kbd>1</kbd>
-              <span>Again</span>
-            </div>
-            <div className="shortcut-legend-item">
-              <kbd>2</kbd>
-              <span>Hard</span>
-            </div>
-            <div className="shortcut-legend-item">
-              <kbd>3</kbd>
-              <span>Good</span>
-            </div>
-            <div className="shortcut-legend-item">
-              <kbd>4</kbd>
-              <span>Easy</span>
-            </div>
-            <div className="shortcut-legend-item">
-              <kbd>F</kbd>
-              <span>Flag card</span>
-            </div>
-            <div className="shortcut-legend-item">
-              <kbd>N</kbd>
-              <span>Add note</span>
-            </div>
+            {[['Space','Show answer'],['1','Again'],['2','Hard'],['3','Good'],['4','Easy'],['F','Flag'],['N','Note']].map(([key, label]) => (
+              <div key={key} className="shortcut-legend-item"><kbd>{key}</kbd><span>{label}</span></div>
+            ))}
           </div>
         </div>
       )}
 
       {!showShortcuts && (
-        <button className="btn-show-shortcuts" onClick={() => setShowShortcuts(true)} title="Show keyboard shortcuts">
-          ⌨️
-        </button>
+        <button className="btn-show-shortcuts" onClick={() => setShowShortcuts(true)} title="Show keyboard shortcuts">⌨️</button>
       )}
 
       <div className="review-header">
@@ -644,33 +544,19 @@ const Review = () => {
               <div className="progress-fill" style={{ width: `${progress}%` }} />
             </div>
             <div className="progress-text">
-              {currentIndex + 1} / {cards.length}
+              {doneInSession} / {sessionTotal}
+              {sessionCards.length > 0 && ` · ${sessionCards.length} remaining`}
             </div>
           </div>
           {selectedSets.length > 0 && (
-            <div className="studying-sets">
-              <strong>Studying:</strong> {getSelectedSetNames()}
-            </div>
+            <div className="studying-sets"><strong>Studying:</strong> {getSelectedSetNames()}</div>
           )}
         </div>
-        <button
-          className={`btn-toggle ${reverseMode ? 'active' : ''}`}
-          onClick={() => setReverseMode(!reverseMode)}
-          title={reverseMode ? 'Currently: Answer → Question' : 'Currently: Question → Answer'}
-        >
+        <button className={`btn-toggle ${reverseMode ? 'active' : ''}`} onClick={() => setReverseMode(!reverseMode)}>
           🔄 {reverseMode ? 'Back → Front' : 'Front → Back'}
         </button>
-        <button
-          className="btn-secondary"
-          onClick={handleShuffle}
-          title="Shuffle cards randomly"
-        >
-          🔀 Shuffle
-        </button>
-        <button
-          className="btn-secondary"
-          onClick={() => setShowSetSelector(!showSetSelector)}
-        >
+        <button className="btn-secondary" onClick={handleShuffle}>🔀 Shuffle</button>
+        <button className="btn-secondary" onClick={() => setShowSetSelector(!showSetSelector)}>
           📚 Filter Sets {selectedSets.length > 0 && `(${selectedSets.length})`}
         </button>
       </div>
@@ -686,43 +572,49 @@ const Review = () => {
                 onClick={() => toggleSetSelection(set.id)}
                 style={{ borderLeft: `4px solid ${set.color}` }}
               >
-                <input
-                  type="checkbox"
-                  checked={selectedSets.includes(set.id)}
-                  onChange={() => toggleSetSelection(set.id)}
-                  onClick={(e) => e.stopPropagation()}
-                />
+                <input type="checkbox" checked={selectedSets.includes(set.id)}
+                  onChange={() => toggleSetSelection(set.id)} onClick={e => e.stopPropagation()} />
                 <span className="set-icon">{set.icon}</span>
                 <span className="set-name">{set.name}</span>
               </div>
             ))}
           </div>
           {selectedSets.length > 0 && (
-            <button
-              className="btn-text"
-              onClick={() => setSelectedSets([])}
-            >
-              Clear All
-            </button>
+            <button className="btn-text" onClick={() => setSelectedSets([])}>Clear All</button>
           )}
         </div>
       )}
 
-      {showSlide && slideContent ? (
+      {/* Break screen — next card not due yet */}
+      {waiting ? (
+        <div className="review-waiting">
+          <div className="waiting-content">
+            <div className="waiting-deco">
+              <span className="waiting-emoji waiting-emoji-1">☕</span>
+              <span className="waiting-emoji waiting-emoji-2">🌿</span>
+              <span className="waiting-emoji waiting-emoji-3">✨</span>
+            </div>
+            <h2 className="waiting-title">Take a break!</h2>
+            <p className="waiting-subtext">Next card due in</p>
+            <div className="waiting-countdown">{formatCountdown(msUntilNext())}</div>
+            <p className="waiting-progress">
+              {doneInSession} / {sessionTotal} done · {sessionCards.length} remaining
+            </p>
+            <button className="btn-skip-wait" onClick={skipWait}>
+              Skip break → show card now
+            </button>
+          </div>
+        </div>
+      ) : showSlide && slideContent ? (
         <div className="slide-overlay">
           <div className="slide-modal">
             <h3>📄 Source Slide: {slideContent.title}</h3>
             <div className="slide-number">Slide {slideContent.slide_number}</div>
             <div className="slide-text">{slideContent.content}</div>
-            <button
-              className="btn-primary"
-              onClick={() => setShowSlide(false)}
-            >
-              Back to Card
-            </button>
+            <button className="btn-primary" onClick={() => setShowSlide(false)}>Back to Card</button>
           </div>
         </div>
-      ) : (
+      ) : currentCard && (
         <div className="review-card-container">
           <div
             ref={cardRef}
@@ -735,31 +627,17 @@ const Review = () => {
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
-            {/* Swipe indicator overlays */}
-            {swipeDirection === 'right' && showAnswer && (
-              <div className="swipe-indicator swipe-good">
-                <span>Good</span>
-              </div>
-            )}
-            {swipeDirection === 'left' && showAnswer && (
-              <div className="swipe-indicator swipe-again">
-                <span>Again</span>
-              </div>
-            )}
+            {swipeDirection === 'right' && showAnswer && <div className="swipe-indicator swipe-good"><span>Good</span></div>}
+            {swipeDirection === 'left' && showAnswer && <div className="swipe-indicator swipe-again"><span>Again</span></div>}
 
             {currentCard.card_type === 'cloze' && currentCard.cloze_data ? (
-              <ClozeCardDisplay
-                clozeData={currentCard.cloze_data}
-                showAnswer={showAnswer}
-                reverseMode={reverseMode}
-              />
+              <ClozeCardDisplay clozeData={currentCard.cloze_data} showAnswer={showAnswer} reverseMode={reverseMode} />
             ) : (
               <>
                 <div className="card-front">
                   <div className="card-label">{reverseMode ? 'Answer:' : 'Question:'}</div>
                   <div className="card-text">{reverseMode ? currentCard.back : currentCard.front}</div>
                 </div>
-
                 {showAnswer && (
                   <div className="card-back">
                     <div className="card-label">{reverseMode ? 'Question:' : 'Answer:'}</div>
@@ -769,139 +647,68 @@ const Review = () => {
               </>
             )}
 
-            {/* Notes Section - shown after answer */}
             {showAnswer && (
               <div className="card-notes-section">
                 <div className="notes-header">
                   <span className="notes-label">📝 Personal Notes</span>
                   {!editingNote && (
-                    <button
-                      className="btn-edit-note"
-                      onClick={() => {
-                        setEditingNote(true);
-                        setNoteText(currentCard.notes || '');
-                      }}
-                    >
+                    <button className="btn-edit-note" onClick={() => { setEditingNote(true); setNoteText(currentCard.notes || ''); }}>
                       {currentCard.notes ? '✏️ Edit' : '➕ Add Note'}
                     </button>
                   )}
                 </div>
                 {editingNote ? (
                   <div className="notes-editor">
-                    <textarea
-                      value={noteText}
-                      onChange={(e) => setNoteText(e.target.value)}
-                      placeholder="What was challenging about this card? Add reminders, mnemonics, or explanations..."
-                      rows={3}
-                      autoFocus
-                    />
+                    <textarea value={noteText} onChange={e => setNoteText(e.target.value)}
+                      placeholder="Add reminders, mnemonics, or explanations..." rows={3} autoFocus />
                     <div className="notes-editor-actions">
-                      <button
-                        className="btn-secondary btn-sm"
-                        onClick={handleCancelNote}
-                        disabled={savingNote}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        className="btn-primary btn-sm"
-                        onClick={handleSaveNote}
-                        disabled={savingNote}
-                      >
+                      <button className="btn-secondary btn-sm" onClick={handleCancelNote} disabled={savingNote}>Cancel</button>
+                      <button className="btn-primary btn-sm" onClick={handleSaveNote} disabled={savingNote}>
                         {savingNote ? 'Saving...' : 'Save Note'}
                       </button>
                     </div>
                   </div>
                 ) : currentCard.notes ? (
-                  <div className="notes-content">
-                    {currentCard.notes}
-                  </div>
+                  <div className="notes-content">{currentCard.notes}</div>
                 ) : (
-                  <div className="notes-empty">
-                    <span>No notes yet. Press <kbd>N</kbd> or click "Add Note" to add one.</span>
-                  </div>
+                  <div className="notes-empty"><span>No notes yet. Press <kbd>N</kbd> to add one.</span></div>
                 )}
               </div>
             )}
 
             <div className="mobile-swipe-hint">
-              {!showAnswer ? (
-                <span>Tap card or swipe to show answer</span>
-              ) : (
-                <span>Swipe left (Again) or right (Good)</span>
-              )}
+              {!showAnswer ? <span>Tap card or swipe to show answer</span> : <span>Swipe left (Again) or right (Good)</span>}
             </div>
 
             <div className="review-actions">
               {!showAnswer ? (
-                <button
-                  className="btn-primary btn-large"
-                  onClick={() => setShowAnswer(true)}
-                >
-                  Show Answer
-                </button>
+                <button className="btn-primary btn-large" onClick={() => setShowAnswer(true)}>Show Answer</button>
               ) : (
                 <>
                   <div className="rating-buttons-anki">
-                    <button
-                      className="btn-rating btn-again"
-                      onClick={() => handleRating('again')}
-                    >
-                      <span className="keyboard-hint">1</span>
-                      <span className="rating-label">Again</span>
-                      <span className="rating-time">{getIntervalPreview('again')}</span>
-                    </button>
-                    <button
-                      className="btn-rating btn-hard"
-                      onClick={() => handleRating('hard')}
-                    >
-                      <span className="keyboard-hint">2</span>
-                      <span className="rating-label">Hard</span>
-                      <span className="rating-time">{getIntervalPreview('hard')}</span>
-                    </button>
-                    <button
-                      className="btn-rating btn-good"
-                      onClick={() => handleRating('good')}
-                    >
-                      <span className="keyboard-hint">3</span>
-                      <span className="rating-label">Good</span>
-                      <span className="rating-time">{getIntervalPreview('good')}</span>
-                    </button>
-                    <button
-                      className="btn-rating btn-easy"
-                      onClick={() => handleRating('easy')}
-                    >
-                      <span className="keyboard-hint">4</span>
-                      <span className="rating-label">Easy</span>
-                      <span className="rating-time">{getIntervalPreview('easy')}</span>
-                    </button>
+                    {['again', 'hard', 'good', 'easy'].map((r, i) => (
+                      <button key={r} className={`btn-rating btn-${r}`} onClick={() => handleRating(r)}>
+                        <span className="keyboard-hint">{i + 1}</span>
+                        <span className="rating-label">{r.charAt(0).toUpperCase() + r.slice(1)}</span>
+                        <span className="rating-time">{getIntervalPreview(r)}</span>
+                      </button>
+                    ))}
                   </div>
-                  <button
-                    className="btn-text btn-settings"
-                    onClick={() => setShowSettings(true)}
-                  >
+                  <button className="btn-text btn-settings" onClick={() => setShowSettings(true)}>
                     ⚙️ Customize Intervals
                   </button>
                   <div className="secondary-actions">
-                    <button
-                      className="btn-secondary btn-edit-card"
-                      onClick={() => navigate(`/flashcards/edit/${currentCard.id}`)}
-                      title="Edit this flashcard"
-                    >
+                    <button className="btn-secondary btn-edit-card" onClick={() => navigate(`/flashcards/edit/${currentCard.id}`)}>
                       ✏️ Edit Card
                     </button>
                     <button
                       className={`flag-btn ${currentCard.is_flagged ? 'flagged' : ''}`}
                       onClick={() => toggleFlag(currentCard.id, currentCard.is_flagged)}
-                      title={currentCard.is_flagged ? 'Unflag this card' : 'Flag as difficult'}
                     >
                       {currentCard.is_flagged ? '🚩 Flagged' : '🏳️ Flag as Difficult'}
                     </button>
                     {currentCard.slides && (
-                      <button
-                        className="btn-secondary"
-                        onClick={handleDontUnderstand}
-                      >
+                      <button className="btn-secondary" onClick={handleDontUnderstand}>
                         📄 Don't Understand - View Source Slide
                       </button>
                     )}
@@ -913,69 +720,52 @@ const Review = () => {
         </div>
       )}
 
-      {/* Rating Stats Bar */}
-      {reviewedCount > 0 && !focusMode && (
+      {reviewedCount > 0 && !focusMode && !waiting && (
         <div className="review-stats-bar">
           <div className="stats-label">Session Stats:</div>
           <div className="stats-items">
-            <div className="stat-item stat-again">
-              <span className="stat-dot">🔴</span>
-              <span className="stat-count">{ratingCounts.again}</span>
-              <span className="stat-name">Again</span>
-            </div>
-            <div className="stat-item stat-hard">
-              <span className="stat-dot">🟠</span>
-              <span className="stat-count">{ratingCounts.hard}</span>
-              <span className="stat-name">Hard</span>
-            </div>
-            <div className="stat-item stat-good">
-              <span className="stat-dot">🟢</span>
-              <span className="stat-count">{ratingCounts.good}</span>
-              <span className="stat-name">Good</span>
-            </div>
-            <div className="stat-item stat-easy">
-              <span className="stat-dot">🟣</span>
-              <span className="stat-count">{ratingCounts.easy}</span>
-              <span className="stat-name">Easy</span>
-            </div>
+            {[['again','🔴'],['hard','🟠'],['good','🟢'],['easy','🟣']].map(([r, dot]) => (
+              <div key={r} className={`stat-item stat-${r}`}>
+                <span className="stat-dot">{dot}</span>
+                <span className="stat-count">{ratingCounts[r]}</span>
+                <span className="stat-name">{r.charAt(0).toUpperCase() + r.slice(1)}</span>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Interval Settings Modal */}
       {showSettings && (
         <div className="modal-overlay" onClick={() => setShowSettings(false)}>
           <div className="modal settings-modal" onClick={e => e.stopPropagation()}>
             <h2>⚙️ Customize Spaced Repetition Intervals</h2>
             <p className="modal-subtitle">Adjust how long until cards reappear based on your rating</p>
+            <p className="modal-subtitle" style={{ fontStyle: 'italic', color: '#888' }}>
+              Again / Hard: card comes back in this session after the configured interval. Good / Easy: scheduled for a future session.
+            </p>
 
             <div className="interval-settings">
               {['again', 'hard', 'good', 'easy'].map(rating => (
                 <div key={rating} className={`interval-setting interval-${rating}`}>
                   <label className="interval-label">
-                    {rating === 'again' && '🔴 Again (Forgot)'}
-                    {rating === 'hard' && '🟠 Hard (Difficult)'}
-                    {rating === 'good' && '🟢 Good (Normal)'}
-                    {rating === 'easy' && '🟣 Easy (Very Easy)'}
+                    {rating === 'again' && '🔴 Again (Forgot — returns after interval)'}
+                    {rating === 'hard' && '🟠 Hard (Difficult — returns after interval)'}
+                    {rating === 'good' && '🟢 Good (Normal — scheduled for later)'}
+                    {rating === 'easy' && '🟣 Easy (Very Easy — scheduled for later)'}
                   </label>
                   <div className="interval-inputs">
-                    <input
-                      type="number"
-                      min="1"
-                      max="999"
+                    <input type="number" min="1" max="999"
                       value={intervalSettings[rating].value}
-                      onChange={(e) => saveIntervalSettings({
+                      onChange={e => saveIntervalSettings({
                         ...intervalSettings,
                         [rating]: { ...intervalSettings[rating], value: parseInt(e.target.value) || 1 }
                       })}
                     />
-                    <select
-                      value={intervalSettings[rating].unit}
-                      onChange={(e) => saveIntervalSettings({
+                    <select value={intervalSettings[rating].unit}
+                      onChange={e => saveIntervalSettings({
                         ...intervalSettings,
                         [rating]: { ...intervalSettings[rating], unit: e.target.value }
-                      })}
-                    >
+                      })}>
                       <option value="minutes">Minutes</option>
                       <option value="hours">Hours</option>
                       <option value="days">Days</option>
@@ -988,15 +778,8 @@ const Review = () => {
               <div className="interval-setting interval-max">
                 <label className="interval-label">📅 Maximum Interval (Days)</label>
                 <div className="interval-inputs">
-                  <input
-                    type="number"
-                    min="1"
-                    max="3650"
-                    value={intervalSettings.maxDays}
-                    onChange={(e) => saveIntervalSettings({
-                      ...intervalSettings,
-                      maxDays: parseInt(e.target.value) || 365
-                    })}
+                  <input type="number" min="1" max="3650" value={intervalSettings.maxDays}
+                    onChange={e => saveIntervalSettings({ ...intervalSettings, maxDays: parseInt(e.target.value) || 365 })}
                   />
                   <span className="interval-unit">days max</span>
                 </div>
@@ -1004,11 +787,7 @@ const Review = () => {
 
               <div className="setting-toggle">
                 <label className="toggle-option">
-                  <input
-                    type="checkbox"
-                    checked={autoShuffle}
-                    onChange={toggleAutoShuffle}
-                  />
+                  <input type="checkbox" checked={autoShuffle} onChange={toggleAutoShuffle} />
                   <span className="toggle-label">🔀 Auto-shuffle after completing all cards</span>
                 </label>
               </div>
@@ -1017,85 +796,26 @@ const Review = () => {
             <div className="settings-presets">
               <p>Quick Presets:</p>
               <div className="preset-buttons">
-                <button
-                  className="btn-secondary btn-sm"
-                  onClick={() => saveIntervalSettings({
-                    again: { value: 1, unit: 'minutes' },
-                    hard: { value: 6, unit: 'minutes' },
-                    good: { value: 10, unit: 'minutes' },
-                    easy: { value: 4, unit: 'days' },
-                    maxDays: 365
-                  })}
-                >
-                  Short Term
-                </button>
-                <button
-                  className="btn-secondary btn-sm"
-                  onClick={() => saveIntervalSettings({
-                    again: { value: 1, unit: 'days' },
-                    hard: { value: 1.2, unit: 'multiplier' },
-                    good: { value: 2.5, unit: 'multiplier' },
-                    easy: { value: 4, unit: 'multiplier' },
-                    maxDays: 365
-                  })}
-                >
-                  Anki Default
-                </button>
-                <button
-                  className="btn-secondary btn-sm"
-                  onClick={() => saveIntervalSettings({
-                    again: { value: 10, unit: 'minutes' },
-                    hard: { value: 1, unit: 'days' },
-                    good: { value: 3, unit: 'days' },
-                    easy: { value: 7, unit: 'days' },
-                    maxDays: 30
-                  })}
-                >
-                  Exam Cram
-                </button>
+                <button className="btn-secondary btn-sm" onClick={() => saveIntervalSettings({
+                  again: { value: 1, unit: 'minutes' }, hard: { value: 6, unit: 'minutes' },
+                  good: { value: 10, unit: 'minutes' }, easy: { value: 4, unit: 'days' }, maxDays: 365
+                })}>Short Term</button>
+                <button className="btn-secondary btn-sm" onClick={() => saveIntervalSettings({
+                  again: { value: 1, unit: 'days' }, hard: { value: 1.2, unit: 'multiplier' },
+                  good: { value: 2.5, unit: 'multiplier' }, easy: { value: 4, unit: 'multiplier' }, maxDays: 365
+                })}>Anki Default</button>
+                <button className="btn-secondary btn-sm" onClick={() => saveIntervalSettings({
+                  again: { value: 10, unit: 'minutes' }, hard: { value: 1, unit: 'days' },
+                  good: { value: 3, unit: 'days' }, easy: { value: 7, unit: 'days' }, maxDays: 30
+                })}>Exam Cram</button>
               </div>
             </div>
 
             <div className="modal-actions">
-              <button className="btn-primary" onClick={() => setShowSettings(false)}>
-                Done
-              </button>
+              <button className="btn-primary" onClick={() => setShowSettings(false)}>Done</button>
             </div>
           </div>
         </div>
-      )}
-
-      {/* Celebration Overlay */}
-      {showCelebration && (
-        <>
-          <div className="celebration-overlay">
-            {createConfetti().map(piece => (
-              <div
-                key={piece.id}
-                className="confetti-piece"
-                style={{
-                  left: `${piece.left}%`,
-                  backgroundColor: piece.color,
-                  animationDelay: `${piece.delay}s`,
-                  transform: `rotate(${piece.rotation}deg)`,
-                }}
-              />
-            ))}
-          </div>
-          <div className="celebration-modal">
-            <div className="celebration-content">
-              <div className="celebration-emoji">🎉</div>
-              <h2>Amazing Work!</h2>
-              <p>You reviewed {reviewedCount + 1} cards!</p>
-              {streakData.currentStreak > 0 && (
-                <div className="streak-celebration">
-                  <span className="streak-fire-emoji">🔥</span>
-                  <span>{streakData.currentStreak} Day Streak!</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </>
       )}
     </div>
   );
