@@ -6,9 +6,21 @@ create table if not exists _keepalive (
   pinged_at timestamptz not null default now()
 );
 
--- Only the service-role key (used by the script) bypasses RLS, so no
--- permissive policies are needed. Enable RLS to block public access.
+-- Enable RLS
 alter table _keepalive enable row level security;
+
+-- Allow the anon role (used by the keep-alive script) to read, insert, update, delete
+create policy "anon can select" on _keepalive
+  for select to anon using (true);
+
+create policy "anon can insert" on _keepalive
+  for insert to anon with check (true);
+
+create policy "anon can update" on _keepalive
+  for update to anon using (true);
+
+create policy "anon can delete" on _keepalive
+  for delete to anon using (true);
 
 -- Optional: human-readable comment in the dashboard
 comment on table _keepalive is
