@@ -2,8 +2,10 @@ name: Supabase keep-alive
 
 on:
   schedule:
-    # Every day at 08:00 UTC
+    # 3× per day: 08:00, 14:00, 20:00 UTC — 15 distinct DB requests/day
     - cron: '0 8 * * *'
+    - cron: '0 14 * * *'
+    - cron: '0 20 * * *'
   workflow_dispatch: # also allows manual trigger from the Actions tab
 
 jobs:

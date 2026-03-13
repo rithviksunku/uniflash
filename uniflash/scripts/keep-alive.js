@@ -1,22 +1,18 @@
 /**
  * Supabase keep-alive script
  *
- * Inserts a row into the `_keepalive` table then deletes rows older than
- * 1 day, keeping the table tiny while still generating real DB activity.
+ * Performs several distinct DB operations (SELECT, INSERT, UPDATE, DELETE)
+ * so the project registers meaningful activity against Supabase's 7-day
+ * inactivity threshold.  The workflow runs this 3× per day.
  *
- * Requires the SERVICE ROLE key (not the anon key) so it bypasses RLS.
+ * Requires the SERVICE ROLE key — bypasses RLS, never expires.
  *
  * ─── Local run ───────────────────────────────────────────────────────────
  *   SUPABASE_URL=https://xxxx.supabase.co \
  *   SUPABASE_SERVICE_ROLE_KEY=eyJ... \
  *   node scripts/keep-alive.js
  *
- * Or with Node 20+ and a .env file:
- *   node --env-file=.env.local scripts/keep-alive.js
- *
- * ─── Automated ───────────────────────────────────────────────────────────
- *   See .github/workflows/keep-alive.yml — GitHub Actions runs this free
- *   on a schedule every 3 days.
+ *   Node 20+: node --env-file=.env.local scripts/keep-alive.js
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -33,34 +29,56 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
 
+function log(msg) {
+  console.log(`[${new Date().toISOString()}] ${msg}`);
+}
+
+async function run(label, fn) {
+  const { error } = await fn();
+  if (error) { console.error(`  ✗ ${label}: ${error.message}`); process.exit(1); }
+  log(`  ✓ ${label}`);
+}
+
 async function ping() {
+  log('Starting keep-alive ping…');
+
+  // 1. SELECT — read existing rows
+  await run('SELECT rows', () =>
+    supabase.from('_keepalive').select('id, pinged_at').order('pinged_at', { ascending: false }).limit(5)
+  );
+
+  // 2. INSERT — new heartbeat row
   const now = new Date().toISOString();
-  console.log(`[${now}] Pinging Supabase…`);
-
-  // 1. Insert a heartbeat row
-  const { error: insertError } = await supabase
+  let insertedId;
+  const { data: inserted, error: insertErr } = await supabase
     .from('_keepalive')
-    .insert({ pinged_at: now });
+    .insert({ pinged_at: now })
+    .select('id')
+    .single();
+  if (insertErr) { console.error(`  ✗ INSERT: ${insertErr.message}`); process.exit(1); }
+  insertedId = inserted.id;
+  log(`  ✓ INSERT row id=${insertedId}`);
 
-  if (insertError) {
-    console.error('Insert failed:', insertError.message);
-    process.exit(1);
-  }
-  console.log('  ✓ Inserted heartbeat row');
+  // 3. UPDATE — touch the row we just inserted
+  await run('UPDATE row', () =>
+    supabase.from('_keepalive').update({ pinged_at: new Date().toISOString() }).eq('id', insertedId)
+  );
 
-  // 2. Delete rows older than 1 day to keep the table clean
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { error: deleteError, count } = await supabase
+  // 4. SELECT again — confirm the update
+  await run('SELECT updated row', () =>
+    supabase.from('_keepalive').select('id, pinged_at').eq('id', insertedId).single()
+  );
+
+  // 5. DELETE — clean up rows older than 2 days
+  const cutoff = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+  const { error: delErr, count } = await supabase
     .from('_keepalive')
     .delete({ count: 'exact' })
     .lt('pinged_at', cutoff);
+  if (delErr) { console.error(`  ✗ DELETE old rows: ${delErr.message}`); process.exit(1); }
+  log(`  ✓ DELETE ${count ?? 0} old row(s)`);
 
-  if (deleteError) {
-    console.error('Delete failed:', deleteError.message);
-    process.exit(1);
-  }
-  console.log(`  ✓ Cleaned up ${count ?? 0} old row(s)`);
-  console.log('Done.');
+  log('Done — 5 requests completed.');
 }
 
 ping();
