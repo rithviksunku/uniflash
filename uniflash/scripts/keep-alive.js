@@ -5,11 +5,11 @@
  * so the project registers meaningful activity against Supabase's 7-day
  * inactivity threshold.  The workflow runs this 3× per day.
  *
- * Requires the SERVICE ROLE key — bypasses RLS, never expires.
+ * Uses the anon key with RLS policies on the _keepalive table.
  *
  * ─── Local run ───────────────────────────────────────────────────────────
  *   SUPABASE_URL=https://xxxx.supabase.co \
- *   SUPABASE_SERVICE_ROLE_KEY=eyJ... \
+ *   SUPABASE_ANON_KEY=eyJ... \
  *   node scripts/keep-alive.js
  *
  *   Node 20+: node --env-file=.env.local scripts/keep-alive.js
@@ -18,14 +18,14 @@
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('Missing env vars: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.');
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error('Missing env vars: SUPABASE_URL and SUPABASE_ANON_KEY are required.');
   process.exit(1);
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: false },
 });
 
