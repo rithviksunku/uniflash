@@ -51,15 +51,19 @@ export const parsePDF = async (file) => {
       const textContent = await page.getTextContent();
 
       // Extract text items and join them
-      const pageText = textContent.items
+      const rawPageText = textContent.items
         .map(item => item.str)
         .join(' ')
         .trim();
 
+      // Extract meaningful content, filtering out metadata
+      const cleanedContent = extractMeaningfulContent(rawPageText);
+
       pages.push({
         pageNumber: i,
-        content: pageText,
-        title: extractTitle(pageText, i)
+        content: cleanedContent,
+        rawContent: rawPageText, // Keep raw content for reference if needed
+        title: extractTitle(rawPageText, i)
       });
     }
 
@@ -89,20 +93,97 @@ export const parsePDF = async (file) => {
 };
 
 /**
+ * Filter out metadata patterns from text
+ * @param {string} text - Raw text content
+ * @returns {string} Cleaned text without metadata
+ */
+const filterMetadata = (text) => {
+  // Patterns to filter out
+  const metadataPatterns = [
+    // Date patterns
+    /\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/g,
+    /\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s*\d{4}\b/gi,
+    /\b\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}\b/g,
+    // Page number patterns
+    /\bPage\s*\d+\s*(?:of\s*\d+)?\b/gi,
+    /^\s*\d+\s*$/gm,
+    // Common presentation metadata
+    /\bCopyright\s*©?\s*\d{4}.*$/gim,
+    /\bAll\s+rights\s+reserved\b/gi,
+    /\bConfidential\b/gi,
+    /\bDraft\b/gi,
+    // Author/presenter patterns at start of slides
+    /^(?:By|Author|Presented\s+by|Presenter|Created\s+by)[:\s]+[\w\s,\.]+$/gim,
+    // File paths and URLs that aren't content
+    /[A-Z]:\\[\w\\\/\-\.]+/g,
+    /^https?:\/\/[^\s]+$/gm,
+    // Version numbers
+    /\bv(?:ersion)?\s*\d+(?:\.\d+)*\b/gi,
+    // Slide numbers like "Slide 1" at beginning
+    /^Slide\s+\d+\s*$/gim,
+  ];
+
+  let cleaned = text;
+  for (const pattern of metadataPatterns) {
+    cleaned = cleaned.replace(pattern, ' ');
+  }
+
+  // Remove multiple spaces and clean up
+  cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
+
+  return cleaned;
+};
+
+/**
+ * Extract meaningful content from text, filtering noise
+ * @param {string} text - Raw page text
+ * @returns {string} Cleaned content
+ */
+const extractMeaningfulContent = (text) => {
+  // First filter metadata
+  let content = filterMetadata(text);
+
+  // Split into sentences/chunks
+  const chunks = content.split(/(?<=[.!?])\s+|(?<=:)\s+/).filter(chunk => {
+    const trimmed = chunk.trim();
+    // Filter out very short chunks that are likely noise
+    if (trimmed.length < 5) return false;
+    // Filter out chunks that are just numbers
+    if (/^\d+$/.test(trimmed)) return false;
+    // Filter out common filler words alone
+    if (/^(?:and|or|the|a|an|is|are|was|were)$/i.test(trimmed)) return false;
+    return true;
+  });
+
+  return chunks.join(' ').trim();
+};
+
+/**
  * Extract a title from page content
  * @param {string} text - Page text content
  * @param {number} pageNumber - Page number
  * @returns {string} Extracted title
  */
 const extractTitle = (text, pageNumber) => {
+  // First filter out metadata
+  const cleanedText = filterMetadata(text);
+
   // Try to extract first meaningful line as title
-  const lines = text.split(/[.\n]/).filter(line => line.trim().length > 0);
+  const lines = cleanedText.split(/[.\n]/).filter(line => {
+    const trimmed = line.trim();
+    // Filter out empty lines, numbers only, very short text
+    return trimmed.length > 3 && !/^\d+$/.test(trimmed);
+  });
 
   if (lines.length > 0) {
     const firstLine = lines[0].trim();
-    // If first line is short (likely a title), use it
-    if (firstLine.length < 100) {
-      return firstLine;
+    // If first line is reasonably short (likely a title), use it
+    if (firstLine.length > 3 && firstLine.length < 100) {
+      // Additional check: avoid common metadata words as titles
+      const metadataWords = ['copyright', 'confidential', 'draft', 'version', 'page', 'slide'];
+      if (!metadataWords.some(word => firstLine.toLowerCase().includes(word))) {
+        return firstLine;
+      }
     }
   }
 
@@ -131,10 +212,17 @@ export const extractStructuredContentWithAI = async (pages) => {
         `Page ${page.pageNumber}:\n${page.content.substring(0, 3000)}`
       ).join('\n\n---\n\n');
 
-      const prompt = `You are an expert at analyzing medical and healthcare educational content. Analyze the following PDF pages and extract:
-1. Main topic/title for each page
-2. Key concepts and definitions
-3. Important facts and information
+      const prompt = `You are an expert at analyzing medical and healthcare educational content. Analyze the following PDF pages and extract ONLY the educational content.
+
+IMPORTANT RULES:
+- IGNORE metadata like author names, dates, page numbers, copyright notices, file paths
+- FOCUS on extracting:
+  1. Vocabulary terms and their definitions
+  2. Drug names, dosages, and their uses
+  3. Medical conditions and their symptoms/causes
+  4. Cause-and-effect relationships
+  5. Key facts, statistics, and clinical information
+  6. Treatment protocols and procedures
 
 PDF Content:
 ${batchContent}
@@ -143,9 +231,12 @@ Return ONLY a JSON array with this structure (no markdown, no code blocks):
 [
   {
     "pageNumber": 1,
-    "title": "main topic",
-    "keyPoints": ["point 1", "point 2", "point 3"],
-    "summary": "brief summary of the page"
+    "title": "main topic (NOT author/date)",
+    "keyPoints": ["educational point 1", "definition or fact 2", "drug/dosage info 3"],
+    "vocabulary": [{"term": "medical term", "definition": "meaning"}],
+    "drugs": [{"name": "drug name", "dosage": "if mentioned", "use": "what it treats"}],
+    "causeEffect": [{"cause": "condition/action", "effect": "result/outcome"}],
+    "summary": "brief educational summary"
   }
 ]`;
 
@@ -205,4 +296,108 @@ export const validatePDFFile = (file) => {
   const validSize = file.size > 0 && file.size < 50 * 1024 * 1024;
 
   return (validExtension || validType) && validSize;
+};
+
+/**
+ * Render a PDF page to a data URL image
+ * @param {ArrayBuffer|Uint8Array|string} pdfData - PDF data (ArrayBuffer, typed array, or URL)
+ * @param {number} pageNumber - Page number to render (1-indexed)
+ * @param {number} scale - Scale factor for rendering (default 1.5)
+ * @returns {Promise<string>} Data URL of the rendered page
+ */
+export const renderPDFPageToImage = async (pdfData, pageNumber, scale = 1.5) => {
+  try {
+    const loadingTask = pdfjsLib.getDocument({
+      data: pdfData,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true
+    });
+
+    const pdf = await loadingTask.promise;
+    const page = await pdf.getPage(pageNumber);
+
+    const viewport = page.getViewport({ scale });
+
+    // Create canvas
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+
+    // Render page
+    await page.render({
+      canvasContext: context,
+      viewport: viewport
+    }).promise;
+
+    // Convert to data URL
+    return canvas.toDataURL('image/png');
+  } catch (error) {
+    console.error('Error rendering PDF page:', error);
+    throw error;
+  }
+};
+
+/**
+ * Load PDF from URL and return the document
+ * @param {string} url - URL to the PDF file
+ * @returns {Promise<PDFDocumentProxy>} PDF document
+ */
+export const loadPDFFromURL = async (url) => {
+  try {
+    const loadingTask = pdfjsLib.getDocument({
+      url: url,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true
+    });
+
+    return await loadingTask.promise;
+  } catch (error) {
+    console.error('Error loading PDF from URL:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get all page images from a PDF
+ * @param {ArrayBuffer|string} pdfData - PDF data or URL
+ * @param {number} scale - Scale factor for rendering
+ * @returns {Promise<Array<string>>} Array of data URLs for each page
+ */
+export const getAllPDFPageImages = async (pdfData, scale = 1.0) => {
+  try {
+    const loadingTask = pdfjsLib.getDocument({
+      data: pdfData,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true
+    });
+
+    const pdf = await loadingTask.promise;
+    const pageImages = [];
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale });
+
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+
+      await page.render({
+        canvasContext: context,
+        viewport: viewport
+      }).promise;
+
+      pageImages.push(canvas.toDataURL('image/jpeg', 0.8));
+    }
+
+    return pageImages;
+  } catch (error) {
+    console.error('Error getting PDF page images:', error);
+    throw error;
+  }
 };

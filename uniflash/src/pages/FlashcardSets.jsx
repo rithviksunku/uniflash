@@ -7,6 +7,8 @@ const FlashcardSets = () => {
   const [sets, setSets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingSet, setEditingSet] = useState(null);
   const [selectedSetsForStudy, setSelectedSetsForStudy] = useState([]);
   const [newSet, setNewSet] = useState({
     name: '',
@@ -64,6 +66,42 @@ const FlashcardSets = () => {
       setSets(sets.filter(s => s.id !== id));
     } else {
       alert(`Error deleting set: ${error.message}`);
+    }
+  };
+
+  const handleEditSet = (set) => {
+    setEditingSet({
+      id: set.id,
+      name: set.name,
+      description: set.description || '',
+      color: set.color || '#9333ea',
+      icon: set.icon || '📚'
+    });
+    setShowEditModal(true);
+  };
+
+  const handleUpdateSet = async () => {
+    if (!editingSet.name.trim()) {
+      alert('Please enter a set name');
+      return;
+    }
+
+    const { error } = await supabase
+      .from('flashcard_sets')
+      .update({
+        name: editingSet.name,
+        description: editingSet.description,
+        color: editingSet.color,
+        icon: editingSet.icon
+      })
+      .eq('id', editingSet.id);
+
+    if (!error) {
+      await fetchSets();
+      setShowEditModal(false);
+      setEditingSet(null);
+    } else {
+      alert(`Error updating set: ${error.message}`);
     }
   };
 
@@ -183,6 +221,12 @@ const FlashcardSets = () => {
                   </button>
                 )}
                 <button
+                  className="btn-secondary"
+                  onClick={() => handleEditSet(set)}
+                >
+                  Edit
+                </button>
+                <button
                   className="btn-danger"
                   onClick={() => handleDeleteSet(set.id)}
                 >
@@ -253,6 +297,71 @@ const FlashcardSets = () => {
                 onClick={handleCreateSet}
               >
                 Create Set
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showEditModal && editingSet && (
+        <div className="modal-overlay" onClick={() => { setShowEditModal(false); setEditingSet(null); }}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h2>Edit Flashcard Set</h2>
+            <div className="form-group">
+              <label htmlFor="edit-set-name">Set Name *</label>
+              <input
+                id="edit-set-name"
+                type="text"
+                placeholder="e.g., Anatomy Chapter 5"
+                value={editingSet.name}
+                onChange={e => setEditingSet({...editingSet, name: e.target.value})}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="edit-set-description">Description (optional)</label>
+              <textarea
+                id="edit-set-description"
+                placeholder="e.g., Cardiovascular system and blood vessels"
+                value={editingSet.description}
+                onChange={e => setEditingSet({...editingSet, description: e.target.value})}
+                rows={3}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="edit-set-icon">Icon (emoji)</label>
+              <input
+                id="edit-set-icon"
+                type="text"
+                placeholder="📚"
+                value={editingSet.icon}
+                onChange={e => setEditingSet({...editingSet, icon: e.target.value})}
+                maxLength={2}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="edit-set-color">Color</label>
+              <div className="color-picker">
+                <input
+                  id="edit-set-color"
+                  type="color"
+                  value={editingSet.color}
+                  onChange={e => setEditingSet({...editingSet, color: e.target.value})}
+                />
+                <span style={{ color: editingSet.color }}>{editingSet.color}</span>
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button
+                className="btn-secondary"
+                onClick={() => { setShowEditModal(false); setEditingSet(null); }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={handleUpdateSet}
+              >
+                Save Changes
               </button>
             </div>
           </div>

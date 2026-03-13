@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import ClozeCardDisplay from '../components/ClozeCardDisplay';
 
 const PracticeMode = () => {
   const navigate = useNavigate();
@@ -11,15 +12,27 @@ const PracticeMode = () => {
   const [showAnswer, setShowAnswer] = useState(false);
   const [isPracticing, setIsPracticing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [reverseMode, setReverseMode] = useState(false); // Review back-to-front
+  const [shuffleEnabled, setShuffleEnabled] = useState(false);
+  const [onlyFlagged, setOnlyFlagged] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(() => {
+    return localStorage.getItem('showKeyboardHints') !== 'false';
+  });
+
+  // Touch/swipe handling for mobile
+  const cardRef = useRef(null);
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchEnd, setTouchEnd] = useState(null);
+  const [swipeDirection, setSwipeDirection] = useState(null);
+  const [swipeOffset, setSwipeOffset] = useState(0);
 
   useEffect(() => {
     fetchFlashcardSets();
-    fetchAllCards();
   }, []);
 
   useEffect(() => {
-    fetchCardsBySelectedSets();
-  }, [selectedSets]);
+    fetchCards();
+  }, [selectedSets, onlyFlagged]);
 
   const fetchFlashcardSets = async () => {
     const { data, error } = await supabase
@@ -33,30 +46,21 @@ const PracticeMode = () => {
     setLoading(false);
   };
 
-  const fetchAllCards = async () => {
-    const { data, error } = await supabase
+  const fetchCards = async () => {
+    let query = supabase
       .from('flashcards')
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (!error) {
-      setCards(data);
-    }
-  };
-
-  const fetchCardsBySelectedSets = async () => {
-    if (selectedSets.length === 0) {
-      // If no sets selected, show all cards
-      fetchAllCards();
-      return;
+    if (selectedSets.length > 0) {
+      query = query.in('set_id', selectedSets);
     }
 
-    const { data, error } = await supabase
-      .from('flashcards')
-      .select('*')
-      .in('set_id', selectedSets)
-      .order('created_at', { ascending: false });
+    if (onlyFlagged) {
+      query = query.eq('is_flagged', true);
+    }
 
+    const { data, error } = await query;
     if (!error) {
       setCards(data || []);
     }
@@ -78,12 +82,32 @@ const PracticeMode = () => {
     setSelectedSets([]);
   };
 
+  // Fisher-Yates shuffle algorithm
+  const shuffleCards = (cardsToShuffle) => {
+    const shuffledCards = [...cardsToShuffle];
+    for (let i = shuffledCards.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledCards[i], shuffledCards[j]] = [shuffledCards[j], shuffledCards[i]];
+    }
+    return shuffledCards;
+  };
+
   const handleStartPractice = () => {
     if (cards.length > 0) {
+      // Shuffle cards if enabled
+      if (shuffleEnabled) {
+        setCards(shuffleCards(cards));
+      }
       setIsPracticing(true);
       setCurrentIndex(0);
       setShowAnswer(false);
     }
+  };
+
+  const handleShuffleNow = () => {
+    setCards(shuffleCards(cards));
+    setCurrentIndex(0);
+    setShowAnswer(false);
   };
 
   const handleNext = () => {
@@ -119,6 +143,72 @@ const PracticeMode = () => {
     }
   };
 
+  // Touch event handlers for mobile swipe
+  const minSwipeDistance = 50;
+
+  const handleTouchStart = (e) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchMove = (e) => {
+    const currentTouch = e.targetTouches[0].clientX;
+    setTouchEnd(currentTouch);
+
+    // Calculate swipe offset for visual feedback
+    if (touchStart) {
+      const offset = currentTouch - touchStart;
+      setSwipeOffset(offset);
+
+      // Determine swipe direction for visual cues
+      if (Math.abs(offset) > 30) {
+        if (showAnswer) {
+          // When answer is shown, swipe determines navigation
+          if (offset > 0) {
+            setSwipeDirection('right'); // Next
+          } else {
+            setSwipeDirection('left'); // Previous
+          }
+        }
+      } else {
+        setSwipeDirection(null);
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStart || !touchEnd) {
+      setSwipeOffset(0);
+      setSwipeDirection(null);
+      return;
+    }
+
+    const distance = touchEnd - touchStart;
+    const isSwipe = Math.abs(distance) > minSwipeDistance;
+
+    if (isSwipe) {
+      if (!showAnswer) {
+        // If answer not shown, swipe to show
+        setShowAnswer(true);
+      } else {
+        // When answer is shown, swipe to navigate
+        if (distance > 0) {
+          // Swipe right = Next
+          handleNext();
+        } else {
+          // Swipe left = Previous
+          handlePrevious();
+        }
+      }
+    }
+
+    // Reset swipe state
+    setTouchStart(null);
+    setTouchEnd(null);
+    setSwipeOffset(0);
+    setSwipeDirection(null);
+  };
+
   // Keyboard shortcuts for practice mode
   useEffect(() => {
     if (!isPracticing) return;
@@ -142,11 +232,17 @@ const PracticeMode = () => {
         e.preventDefault();
         handlePrevious();
       }
+
+      // F key to flag card
+      if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        toggleFlag(currentCard.id, currentCard.is_flagged);
+      }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [isPracticing, showAnswer, currentIndex, cards.length]);
+  }, [isPracticing, showAnswer, currentIndex, cards]);
 
   if (loading) {
     return <div className="loading">Loading flashcards...</div>;
@@ -189,7 +285,7 @@ const PracticeMode = () => {
                   <input
                     type="checkbox"
                     checked={selectedSets.includes(set.id)}
-                    onChange={() => {}}
+                    onChange={() => toggleSetSelection(set.id)}
                     onClick={(e) => e.stopPropagation()}
                   />
                   <div className="set-info-practice">
@@ -209,11 +305,40 @@ const PracticeMode = () => {
           <div className="info-card">
             <div className="info-number">{cards.length}</div>
             <div className="info-label">
-              {selectedSets.length === 0 ? 'Total cards (all sets)' :
-               selectedSets.length === 1 ? 'Cards in selected set' :
-               `Cards in ${selectedSets.length} selected sets`}
+              {selectedSets.length === 0
+                ? (onlyFlagged ? 'Flagged cards across all sets' : 'Total cards (all sets)')
+                : selectedSets.length === 1
+                  ? (onlyFlagged ? 'Flagged cards in selected set' : 'Cards in selected set')
+                  : (onlyFlagged ? `Flagged cards in ${selectedSets.length} sets` : `Cards in ${selectedSets.length} selected sets`)}
             </div>
           </div>
+        </div>
+
+        <div className="practice-options">
+          <label className="toggle-option">
+            <input
+              type="checkbox"
+              checked={onlyFlagged}
+              onChange={(e) => setOnlyFlagged(e.target.checked)}
+            />
+            <span className="toggle-label">🚩 Only Flagged Cards</span>
+          </label>
+          <label className="toggle-option">
+            <input
+              type="checkbox"
+              checked={reverseMode}
+              onChange={(e) => setReverseMode(e.target.checked)}
+            />
+            <span className="toggle-label">🔄 Reverse Mode (Answer → Question)</span>
+          </label>
+          <label className="toggle-option">
+            <input
+              type="checkbox"
+              checked={shuffleEnabled}
+              onChange={(e) => setShuffleEnabled(e.target.checked)}
+            />
+            <span className="toggle-label">🔀 Shuffle Cards</span>
+          </label>
         </div>
 
         {cards.length === 0 ? (
@@ -250,6 +375,40 @@ const PracticeMode = () => {
 
   return (
     <div className="practice-session">
+      {/* Floating Keyboard Shortcuts Legend */}
+      {showShortcuts && (
+        <div className="shortcuts-legend-float">
+          <div className="shortcuts-legend-header">
+            <span>⌨️ Shortcuts</span>
+            <button className="btn-close-legend" onClick={() => setShowShortcuts(false)}>×</button>
+          </div>
+          <div className="shortcuts-legend-items">
+            <div className="shortcut-legend-item">
+              <kbd>Space</kbd>
+              <span>Show answer</span>
+            </div>
+            <div className="shortcut-legend-item">
+              <kbd>←</kbd>
+              <span>Previous</span>
+            </div>
+            <div className="shortcut-legend-item">
+              <kbd>→</kbd>
+              <span>Next</span>
+            </div>
+            <div className="shortcut-legend-item">
+              <kbd>F</kbd>
+              <span>Flag card</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!showShortcuts && (
+        <button className="btn-show-shortcuts" onClick={() => setShowShortcuts(true)} title="Show keyboard shortcuts">
+          ⌨️
+        </button>
+      )}
+
       <div className="practice-progress">
         <div className="progress-bar">
           <div className="progress-fill" style={{ width: `${progress}%` }} />
@@ -260,37 +419,90 @@ const PracticeMode = () => {
       </div>
 
       <div className="practice-card-container">
-        <div className="practice-card-large" onClick={() => !showAnswer && setShowAnswer(true)}>
-          <div className="card-front-practice">
-            <div className="card-label-practice">Question</div>
-            <div className="card-text-practice">{currentCard.front}</div>
-          </div>
-
-          {showAnswer && (
-            <div className="card-back-practice">
-              <div className="divider-practice">•••</div>
-              <div className="card-label-practice">Answer</div>
-              <div className="card-text-practice">{currentCard.back}</div>
+        <div
+          ref={cardRef}
+          className={`practice-card-large ${swipeDirection ? `swipe-${swipeDirection}` : ''}`}
+          style={{
+            transform: swipeOffset ? `translateX(${swipeOffset * 0.3}px) rotate(${swipeOffset * 0.02}deg)` : 'none',
+            transition: swipeOffset ? 'none' : 'transform 0.3s ease'
+          }}
+          onClick={() => !showAnswer && setShowAnswer(true)}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          {/* Swipe indicator overlays */}
+          {swipeDirection === 'right' && showAnswer && (
+            <div className="swipe-indicator swipe-next">
+              <span>Next →</span>
             </div>
+          )}
+          {swipeDirection === 'left' && showAnswer && (
+            <div className="swipe-indicator swipe-prev">
+              <span>← Prev</span>
+            </div>
+          )}
+
+          {currentCard.card_type === 'cloze' && currentCard.cloze_data ? (
+            <ClozeCardDisplay
+              clozeData={currentCard.cloze_data}
+              showAnswer={showAnswer}
+              reverseMode={reverseMode}
+            />
+          ) : (
+            <>
+              <div className="card-front-practice">
+                <div className="card-label-practice">{reverseMode ? 'Answer' : 'Question'}</div>
+                <div className="card-text-practice">{reverseMode ? currentCard.back : currentCard.front}</div>
+              </div>
+
+              {showAnswer && (
+                <div className="card-back-practice">
+                  <div className="divider-practice">•••</div>
+                  <div className="card-label-practice">{reverseMode ? 'Question' : 'Answer'}</div>
+                  <div className="card-text-practice">{reverseMode ? currentCard.front : currentCard.back}</div>
+                </div>
+              )}
+            </>
           )}
 
           {!showAnswer && (
             <div className="tap-hint">
-              👆 Tap anywhere or press <kbd>Space</kbd> to reveal answer
+              👆 Tap or swipe to reveal {reverseMode ? 'question' : 'answer'}
             </div>
           )}
+
+          <div className="mobile-swipe-hint">
+            {!showAnswer ? (
+              <span>Swipe to show answer</span>
+            ) : (
+              <span>Swipe left (Prev) or right (Next)</span>
+            )}
+          </div>
         </div>
 
-        <button
-          className={`flag-btn ${currentCard.is_flagged ? 'flagged' : ''}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleFlag(currentCard.id, currentCard.is_flagged);
-          }}
-          title={currentCard.is_flagged ? 'Unflag this card' : 'Flag as difficult'}
-        >
-          {currentCard.is_flagged ? '🚩 Flagged' : '🏳️ Flag'}
-        </button>
+        <div className="card-action-buttons">
+          <button
+            className="btn-secondary btn-edit-card"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/flashcards/edit/${currentCard.id}`);
+            }}
+            title="Edit this flashcard"
+          >
+            ✏️ Edit
+          </button>
+          <button
+            className={`flag-btn ${currentCard.is_flagged ? 'flagged' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFlag(currentCard.id, currentCard.is_flagged);
+            }}
+            title={currentCard.is_flagged ? 'Unflag this card' : 'Flag as difficult'}
+          >
+            {currentCard.is_flagged ? '🚩 Flagged' : '🏳️ Flag'}
+          </button>
+        </div>
       </div>
 
       <div className="practice-controls">
@@ -318,12 +530,21 @@ const PracticeMode = () => {
           </>
         )}
 
-        <button
-          className="btn-text"
-          onClick={() => setIsPracticing(false)}
-        >
-          Exit Practice
-        </button>
+        <div className="practice-extra-controls">
+          <button
+            className="btn-secondary btn-sm"
+            onClick={handleShuffleNow}
+            title="Shuffle remaining cards"
+          >
+            🔀 Shuffle
+          </button>
+          <button
+            className="btn-text"
+            onClick={() => setIsPracticing(false)}
+          >
+            Exit Practice
+          </button>
+        </div>
       </div>
     </div>
   );

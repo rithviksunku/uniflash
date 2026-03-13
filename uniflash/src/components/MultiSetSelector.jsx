@@ -133,7 +133,7 @@ const MultiSetSelector = ({
                   <input
                     type="checkbox"
                     checked={selectedSets.includes(set.id)}
-                    onChange={() => {}}
+                    onChange={() => toggleSet(set.id)}
                     onClick={(e) => e.stopPropagation()}
                   />
                   <span className="set-icon">{set.icon}</span>

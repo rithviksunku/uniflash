@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { parsePPTX, validatePPTXFile } from '../services/pptxParser';
-import { parsePDF, validatePDFFile, extractStructuredContentWithAI } from '../services/pdfParser';
+import { parsePDF, validatePDFFile, extractStructuredContentWithAI, getAllPDFPageImages } from '../services/pdfParser';
 
 const UploadSlides = () => {
   const navigate = useNavigate();
@@ -10,6 +10,7 @@ const UploadSlides = () => {
   const [fileType, setFileType] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState({ step: '', progress: 0 });
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -32,17 +33,48 @@ const UploadSlides = () => {
 
     setUploading(true);
     setError(null);
+    setUploadProgress({ step: 'Reading file...', progress: 5 });
+
+    // Simulate progress during AI analysis
+    let progressInterval = null;
+    const startProgressSimulation = (startProgress, endProgress, step) => {
+      let currentProgress = startProgress;
+      progressInterval = setInterval(() => {
+        if (currentProgress < endProgress) {
+          currentProgress += 1;
+          setUploadProgress({ step, progress: currentProgress });
+        }
+      }, 500);
+    };
+
+    const stopProgressSimulation = () => {
+      if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+      }
+    };
 
     try {
       let parsedContent;
 
       // Parse file based on type
       if (fileType === 'pdf') {
+        setUploadProgress({ step: 'Extracting PDF pages...', progress: 10 });
         const pdfPages = await parsePDF(file);
+
+        setUploadProgress({ step: 'Analyzing content with AI...', progress: 20 });
+        // Start simulated progress during AI analysis
+        startProgressSimulation(20, 55, 'Analyzing content with AI...');
         parsedContent = await extractStructuredContentWithAI(pdfPages);
+        stopProgressSimulation();
       } else {
+        setUploadProgress({ step: 'Parsing PowerPoint slides...', progress: 20 });
+        startProgressSimulation(20, 55, 'Parsing PowerPoint slides...');
         parsedContent = await parsePPTX(file);
+        stopProgressSimulation();
       }
+
+      setUploadProgress({ step: 'Uploading to cloud...', progress: 60 });
 
       // Upload file to Supabase Storage
       const fileName = `${Date.now()}_${file.name}`;
@@ -51,6 +83,8 @@ const UploadSlides = () => {
         .upload(fileName, file);
 
       if (uploadError) throw uploadError;
+
+      setUploadProgress({ step: 'Creating presentation record...', progress: 75 });
 
       // Create presentation record
       const { data: presentation, error: dbError } = await supabase
@@ -68,6 +102,8 @@ const UploadSlides = () => {
 
       if (dbError) throw dbError;
 
+      setUploadProgress({ step: 'Saving slides...', progress: 90 });
+
       // Insert parsed slides/pages into database
       const slidesToInsert = parsedContent.map((item, index) => ({
         presentation_id: presentation.id,
@@ -83,10 +119,15 @@ const UploadSlides = () => {
 
       if (slidesError) throw slidesError;
 
+      setUploadProgress({ step: 'Complete!', progress: 100 });
+
       // Navigate to slide selection page
-      navigate(`/slides/${presentation.id}`);
+      setTimeout(() => {
+        navigate(`/slides/${presentation.id}`);
+      }, 500);
     } catch (err) {
       setError(err.message);
+      setUploadProgress({ step: '', progress: 0 });
     } finally {
       setUploading(false);
     }
@@ -94,6 +135,47 @@ const UploadSlides = () => {
 
   return (
     <div className="upload-slides">
+      {/* Loading Overlay */}
+      {uploading && (
+        <div className="upload-loading-overlay">
+          <div className="upload-loading-card">
+            <div className="loading-animation">
+              <div className="loading-doc">
+                {fileType === 'pdf' ? '📄' : '📊'}
+              </div>
+              <div className="loading-sparkles">
+                <span>✨</span>
+                <span>✨</span>
+                <span>✨</span>
+              </div>
+            </div>
+
+            <h2>Processing Your {fileType === 'pdf' ? 'PDF' : 'Presentation'}</h2>
+            <p className="loading-step">{uploadProgress.step}</p>
+
+            <div className="progress-bar-container">
+              <div
+                className="progress-bar-fill"
+                style={{ width: `${uploadProgress.progress}%` }}
+              />
+            </div>
+            <span className="progress-percentage">{uploadProgress.progress}%</span>
+
+            <div className="loading-tips">
+              {uploadProgress.progress < 50 && (
+                <p>🧠 AI is analyzing your content for optimal flashcard generation...</p>
+              )}
+              {uploadProgress.progress >= 50 && uploadProgress.progress < 80 && (
+                <p>☁️ Securely uploading to the cloud...</p>
+              )}
+              {uploadProgress.progress >= 80 && (
+                <p>🎉 Almost there! Finalizing your presentation...</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="upload-header">
         <h1>📤 Upload Presentation</h1>
         <p>Upload your PowerPoint (.pptx) or PDF files to extract content and create flashcards</p>
@@ -136,7 +218,7 @@ const UploadSlides = () => {
             onClick={handleUpload}
             disabled={!file || uploading}
           >
-            {uploading ? 'Uploading...' : 'Upload & Parse'}
+            {uploading ? 'Processing...' : 'Upload & Parse'}
           </button>
         </div>
       </div>

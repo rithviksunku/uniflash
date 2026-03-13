@@ -19,7 +19,14 @@
       "Bash(git remote set-url:*)",
       "Bash(git commit:*)",
       "Bash(git rm:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(ls:*)",
+      "Bash(git checkout:*)",
+      "Bash(curl:*)",
+      "Bash(git symbolic-ref:*)",
+      "Bash(git remote set-head:*)",
+      "Bash(gh repo edit:*)",
+      "Bash(xargs ls:*)"
     ]
   }
 }

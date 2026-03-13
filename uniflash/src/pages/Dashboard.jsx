@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 
@@ -9,11 +9,39 @@ const Dashboard = () => {
     cardsReviewed: 0,
     timeSpent: 0,
   });
+  const [streakData, setStreakData] = useState({
+    currentStreak: 0,
+    longestStreak: 0,
+  });
+  const [weeklyData, setWeeklyData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch all data in parallel for faster loading
+  const fetchAllData = useCallback(async () => {
+    setLoading(true);
+    try {
+      await Promise.all([
+        fetchDueCards(),
+        fetchReviewStats(),
+        fetchStreakData(),
+        fetchWeeklyData()
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    fetchDueCards();
-    fetchReviewStats();
-  }, []);
+    fetchAllData();
+
+    // Refresh data when page gains focus (returning from review)
+    const handleFocus = () => {
+      fetchAllData();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [fetchAllData]);
 
   const fetchDueCards = async () => {
     const { data, error } = await supabase
@@ -26,12 +54,24 @@ const Dashboard = () => {
     }
   };
 
+  // Helper to get local date string (YYYY-MM-DD) without timezone issues
+  const getLocalDateString = (date = new Date()) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const fetchReviewStats = async () => {
-    const today = new Date().toISOString().split('T')[0];
+    // Use local midnight for today's start
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayISO = today.toISOString();
+
     const { data, error } = await supabase
       .from('review_sessions')
       .select('cards_reviewed, time_spent')
-      .gte('created_at', today);
+      .gte('created_at', todayISO);
 
     if (!error && data) {
       const stats = data.reduce((acc, session) => ({
@@ -43,14 +83,114 @@ const Dashboard = () => {
     }
   };
 
+  const fetchStreakData = async () => {
+    const { data, error } = await supabase
+      .from('study_streaks')
+      .select('current_streak, longest_streak')
+      .single();
+
+    if (!error && data) {
+      setStreakData({
+        currentStreak: data.current_streak || 0,
+        longestStreak: data.longest_streak || 0,
+      });
+    }
+  };
+
+  const fetchWeeklyData = async () => {
+    const days = [];
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = getLocalDateString(date);
+
+      days.push({
+        date: dateStr,
+        dayName: dayNames[date.getDay()],
+        isToday: i === 0,
+      });
+    }
+
+    // Get start of 7 days ago at midnight local time
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 6);
+    startDate.setHours(0, 0, 0, 0);
+
+    const { data, error } = await supabase
+      .from('review_sessions')
+      .select('created_at, cards_reviewed')
+      .gte('created_at', startDate.toISOString());
+
+    if (!error) {
+      const cardsByDay = {};
+      (data || []).forEach(session => {
+        // Convert UTC timestamp to local date
+        const sessionDate = new Date(session.created_at);
+        const localDay = getLocalDateString(sessionDate);
+        cardsByDay[localDay] = (cardsByDay[localDay] || 0) + session.cards_reviewed;
+      });
+
+      const weekData = days.map(day => ({
+        ...day,
+        cards: cardsByDay[day.date] || 0,
+      }));
+
+      setWeeklyData(weekData);
+    }
+  };
+
+  const getMaxCards = () => Math.max(...weeklyData.map(d => d.cards), 1);
+
+  const getMotivationalMessage = () => {
+    const totalWeek = weeklyData.reduce((sum, d) => sum + d.cards, 0);
+    const todayCards = weeklyData.find(d => d.isToday)?.cards || 0;
+
+    if (todayCards > 50) return { emoji: '🚀', message: "You're on fire today!" };
+    if (todayCards > 20) return { emoji: '⭐', message: 'Great progress today!' };
+    if (totalWeek > 100) return { emoji: '🏆', message: 'Amazing week so far!' };
+    if (streakData.currentStreak >= 7) return { emoji: '🔥', message: 'Keep that streak alive!' };
+    if (dueCount > 0) return { emoji: '📚', message: `${dueCount} cards waiting for you!` };
+    return { emoji: '🌟', message: 'Ready to learn something new?' };
+  };
+
+  const getStreakEmoji = (streak) => {
+    if (streak >= 30) return '👑';
+    if (streak >= 14) return '🔥';
+    if (streak >= 7) return '⭐';
+    if (streak >= 3) return '✨';
+    return '🌱';
+  };
+
+  const getStreakMessage = (streak) => {
+    if (streak >= 30) return 'Legendary!';
+    if (streak >= 14) return 'On Fire!';
+    if (streak >= 7) return 'Great Week!';
+    if (streak >= 3) return 'Building Momentum!';
+    if (streak >= 1) return 'Keep Going!';
+    return 'Start Today!';
+  };
+
   return (
     <div className="dashboard">
       <div className="dashboard-header">
         <h1>✨ Uniflash Dashboard</h1>
         <p className="subtitle">🦄 Learn smarter, not harder</p>
+        {loading && <span className="refreshing-indicator">Refreshing...</span>}
       </div>
 
-      <div className="stats-container">
+      <div className={`stats-container ${loading ? 'stats-loading' : ''}`}>
+        <div className={`stat-card streak-card ${streakData.currentStreak >= 7 ? 'streak-fire' : ''}`}>
+          <div className="stat-icon streak-icon">{getStreakEmoji(streakData.currentStreak)}</div>
+          <div className="stat-value streak-value">{streakData.currentStreak}</div>
+          <div className="stat-label">Day Streak</div>
+          <div className="streak-message">{getStreakMessage(streakData.currentStreak)}</div>
+          {streakData.longestStreak > 0 && (
+            <div className="streak-best">Best: {streakData.longestStreak} days</div>
+          )}
+        </div>
+
         <div className="stat-card">
           <div className="stat-icon">🎴</div>
           <div className="stat-value">{dueCount}</div>
@@ -70,80 +210,89 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="action-cards">
+      {/* Primary Actions - Start Review & Practice Mode */}
+      <div className="primary-actions">
         <button
-          className="action-card primary"
+          className="action-card-large primary"
           onClick={() => navigate('/review')}
           disabled={dueCount === 0}
         >
-          <span className="action-icon">🔥</span>
-          <h3>Start Review</h3>
-          <p>{dueCount > 0 ? `${dueCount} cards waiting` : 'No cards due'}</p>
+          <span className="action-icon-large">🔥</span>
+          <div className="action-content">
+            <h3>Start Review</h3>
+            <p>{dueCount > 0 ? `${dueCount} cards waiting` : 'No cards due'}</p>
+          </div>
         </button>
 
         <button
-          className="action-card"
+          className="action-card-large"
           onClick={() => navigate('/flashcards/practice')}
         >
-          <span className="action-icon">📖</span>
-          <h3>Practice Mode</h3>
-          <p>Review all flashcards</p>
-        </button>
-
-        <button
-          className="action-card"
-          onClick={() => navigate('/upload')}
-        >
-          <span className="action-icon">📤</span>
-          <h3>Upload Slides</h3>
-          <p>Import PowerPoint or PDF</p>
-        </button>
-
-        <button
-          className="action-card"
-          onClick={() => navigate('/presentations')}
-        >
-          <span className="action-icon">📚</span>
-          <h3>My Presentations</h3>
-          <p>View and manage files</p>
-        </button>
-
-        <button
-          className="action-card"
-          onClick={() => navigate('/flashcards/create')}
-        >
-          <span className="action-icon">➕</span>
-          <h3>Create Flashcards</h3>
-          <p>Manual entry</p>
-        </button>
-
-        <button
-          className="action-card"
-          onClick={() => navigate('/quiz/generate')}
-        >
-          <span className="action-icon">🎯</span>
-          <h3>Generate Quiz</h3>
-          <p>Test your knowledge</p>
-        </button>
-
-        <button
-          className="action-card"
-          onClick={() => navigate('/quiz/history')}
-        >
-          <span className="action-icon">📊</span>
-          <h3>Quiz History</h3>
-          <p>View and retake quizzes</p>
-        </button>
-
-        <button
-          className="action-card"
-          onClick={() => navigate('/flashcards')}
-        >
-          <span className="action-icon">📋</span>
-          <h3>Manage Flashcards</h3>
-          <p>View and edit</p>
+          <span className="action-icon-large">📖</span>
+          <div className="action-content">
+            <h3>Practice Mode</h3>
+            <p>Study without spaced repetition</p>
+          </div>
         </button>
       </div>
+
+      {/* Quick Links */}
+      <div className="quick-links">
+        <button className="quick-link" onClick={() => navigate('/flashcards/create')}>
+          ➕ Create Cards
+        </button>
+        <button className="quick-link" onClick={() => navigate('/upload')}>
+          📤 Upload Slides
+        </button>
+        <button className="quick-link" onClick={() => navigate('/quiz/generate')}>
+          🎯 Take Quiz
+        </button>
+        <button className="quick-link" onClick={() => navigate('/flashcards')}>
+          📋 My Cards
+        </button>
+        <button className="quick-link" onClick={() => navigate('/sets')}>
+          📚 Flashcard Sets
+        </button>
+        <button className="quick-link" onClick={() => navigate('/presentations')}>
+          🗂️ Presentations
+        </button>
+        <button className="quick-link" onClick={() => navigate('/quiz/history')}>
+          📊 Quiz History
+        </button>
+      </div>
+
+      {/* Weekly Study Chart */}
+      {weeklyData.length > 0 && (
+        <div className="weekly-chart-card">
+          <div className="chart-header">
+            <h3>📈 Your Week</h3>
+            <div className="chart-motivation">
+              <span className="motivation-emoji">{getMotivationalMessage().emoji}</span>
+              <span className="motivation-text">{getMotivationalMessage().message}</span>
+            </div>
+          </div>
+          <div className="weekly-chart">
+            {weeklyData.map((day, index) => (
+              <div key={index} className={`chart-bar-container ${day.isToday ? 'today' : ''}`}>
+                <div className="chart-bar-wrapper">
+                  <div
+                    className="chart-bar"
+                    style={{ height: `${(day.cards / getMaxCards()) * 100}%` }}
+                  >
+                    {day.cards > 0 && <span className="bar-value">{day.cards}</span>}
+                  </div>
+                </div>
+                <span className="chart-day">{day.dayName}</span>
+              </div>
+            ))}
+          </div>
+          <div className="chart-footer">
+            <span className="chart-total">
+              🎯 {weeklyData.reduce((sum, d) => sum + d.cards, 0)} cards this week
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

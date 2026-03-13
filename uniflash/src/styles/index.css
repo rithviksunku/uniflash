@@ -45,6 +45,39 @@
   --transition: all 0.2s ease-in-out;
 }
 
+/* Dark Mode Theme */
+.dark-mode {
+  --primary: #a855f7;
+  --primary-light: #c084fc;
+  --primary-dark: #9333ea;
+  --secondary: #f472b6;
+  --secondary-light: #f9a8d4;
+  --accent: #22d3ee;
+  --accent-light: #67e8f9;
+
+  --success: #34d399;
+  --warning: #fbbf24;
+  --error: #f87171;
+  --info: #60a5fa;
+
+  --bg-primary: #0f0a1a;
+  --bg-secondary: #1a1025;
+  --bg-tertiary: #251530;
+
+  --text-primary: #f3e8ff;
+  --text-secondary: #c4b5d0;
+  --text-light: #9a8aaa;
+
+  --border: #3d2a50;
+  --border-light: #2d1f3d;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
@@ -54,6 +87,79 @@ body {
   background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
   color: var(--text-primary);
   min-height: 100vh;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+.dark-mode body,
+body.dark-mode {
+  background: linear-gradient(135deg, #0f0a1a 0%, #1a1025 100%);
+}
+
+/* Dark mode overrides for elements with hardcoded colors */
+.dark-mode .btn-secondary {
+  background: var(--bg-secondary);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.dark-mode .btn-secondary:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+}
+
+.dark-mode input[type="text"],
+.dark-mode input[type="number"],
+.dark-mode input[type="email"],
+.dark-mode input[type="password"],
+.dark-mode textarea,
+.dark-mode select {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+.dark-mode .card,
+.dark-mode .set-card,
+.dark-mode .modal,
+.dark-mode .help-card,
+.dark-mode .quiz-card,
+.dark-mode .presentation-card,
+.dark-mode .question-card,
+.dark-mode .missed-question-card,
+.dark-mode .set-selector,
+.dark-mode .score-summary,
+.dark-mode .perfect-score {
+  background: var(--bg-secondary);
+}
+
+.dark-mode .error-message {
+  background: #3b1d1d;
+  border-color: #7f2d2d;
+  color: #fca5a5;
+}
+
+.dark-mode .success-message {
+  background: #1d3b2d;
+  border-color: #2d7f4d;
+  color: #6ee7b7;
+}
+
+.dark-mode .modal-overlay {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.dark-mode .tap-hint kbd {
+  background: var(--bg-tertiary);
+  border-color: var(--border);
+}
+
+.dark-mode .btn-focus-toggle {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+}
+
+.dark-mode .review-card,
+.dark-mode .practice-card-large {
+  background: var(--bg-secondary);
 }
 
 code {
@@ -648,55 +754,81 @@ input[type="checkbox"] {
 .practice-card-large {
   background: white;
   border-radius: var(--radius-xl);
-  padding: 3rem;
+  padding: 2.5rem;
   box-shadow: var(--shadow-lg);
-  min-height: 400px;
+  min-height: 500px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
+  text-align: left;
   cursor: pointer;
-  transition: var(--transition);
-  margin: 2rem 0;
-}
-
-.practice-card-large:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-xl);
-}
-
-.card-front-practice,
-.card-back-practice {
+  transition: box-shadow 0.2s ease;
+  margin: 1.5rem 0;
+  max-width: 800px;
   width: 100%;
 }
 
+.practice-card-large:hover {
+  box-shadow: var(--shadow-xl);
+}
+
+.card-front-practice {
+  width: 100%;
+  padding-bottom: 1.5rem;
+  border-bottom: 2px solid #e5e7eb;
+  min-height: 180px;
+}
+
+.card-back-practice {
+  width: 100%;
+  padding-top: 1.5rem;
+  animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .card-label-practice {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 1.5px;
   color: var(--text-secondary);
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   font-weight: 600;
 }
 
+.card-front-practice .card-label-practice {
+  color: var(--primary);
+}
+
+.card-back-practice .card-label-practice {
+  color: #22c55e;
+}
+
 .card-text-practice {
-  font-size: 1.5rem;
-  line-height: 1.6;
+  font-size: 1.25rem;
+  line-height: 1.7;
   color: var(--text-primary);
-  font-weight: 500;
+  white-space: pre-wrap;
 }
 
 .divider-practice {
-  font-size: 2rem;
-  color: var(--primary);
-  margin: 2rem 0;
+  display: none;
 }
 
 .tap-hint {
-  margin-top: 2rem;
-  font-size: 1rem;
+  margin-top: auto;
+  padding-top: 2rem;
+  font-size: 0.9rem;
   color: var(--text-light);
+  text-align: center;
   animation: pulse 2s infinite;
 }
 
